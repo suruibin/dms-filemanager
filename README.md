@@ -1,6 +1,6 @@
 # DMS File Manager
 
-文件夹查看器小部件，可在屏幕上显示和管理文件与目录。
+- dms下的轻量级文件管理器
 
 ## 截图
 
@@ -11,15 +11,14 @@
 ## 安装
 
 ```bash
-git clone https://github.com/suruibin/dms-conky ~/.config/DankMaterialShell/plugins/conky
+git clone https://github.com/suruibin/dms-filemanager ~/.config/DankMaterialShell/plugins/dms-filemanager
 ```
-复制dmsfilemanager到  ~/.config/DankMaterialShell/plugins/
 
 ## 功能
 
 - **多语言切换：** 预设多语言切换。
 - **目录切换：** 在预定义系统文件夹（桌面、下载、主目录等）或任意自定义目录路径间切换。
-- **多种布局：** 在网格视图、列表视图和紧凑视图之间切换（在设置中配置；紧凑视图会根据小部件宽度自动折列）。
+- **多种布局：** 在网格视图、列表视图和紧凑视图之间切换。
 - **快速操作：** 搜索/筛选项目、排序文件（按名称、日期、大小、类型），或从小部件标题栏直接创建项目。
 - **可调节尺寸：** Ctrl + 鼠标滚里滑动 调整文件大小
 - **文件操作：** 创建项目（文件夹/文档）、重命名、复制路径、移到回收站以及系统剪贴板文件复制。
@@ -55,6 +54,6 @@ git clone https://github.com/suruibin/dms-conky ~/.config/DankMaterialShell/plug
 
 ## 许可证
 
-GPL-3.0
+- GPL-3.0
 
 ## 待办 / 路线图
