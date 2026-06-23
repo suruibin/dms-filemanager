@@ -8,7 +8,7 @@ import "./dms-common"
 Popup {
     id: renameDialog
     width: 260
-    height: 156
+    height: 100
     padding: 0
     modal: false
     focus: true
@@ -26,6 +26,11 @@ Popup {
     property string fileExt: ""
     property bool isDir: false
     property var inputField: null
+
+    TextMetrics {
+        id: _dialogMetrics
+        font.pixelSize: Theme.fontSizeMedium
+    }
 
     // ── Plugin I18n ──────────────────────────────────────────────────────────
     property var _pluginFlatTranslations: ({})
@@ -97,37 +102,15 @@ Popup {
             anchors.margins: Theme.spacingM
             spacing: Theme.spacingS
 
-            StyledText {
-                text: i18n("Rename")
-                font.bold: true
-                font.pixelSize: Theme.fontSizeMedium
-                color: Theme.surfaceText
-            }
-
-            Row {
+            DankTextField {
+                id: renameField
                 width: parent.width
-                spacing: Theme.spacingS
+                placeholderText: i18n("Enter new name...")
+                focus: true
+                onAccepted: renameDialog.performRename()
 
-                DankTextField {
-                    id: renameField
-                    width: parent.width - (extLabel.visible ? extLabel.implicitWidth + Theme.spacingS : 0)
-                    placeholderText: i18n("Enter new name...")
-                    focus: true
-                    onAccepted: renameDialog.performRename()
-
-                    Component.onCompleted: {
-                        renameDialog.inputField = renameField;
-                    }
-                }
-
-                StyledText {
-                    id: extLabel
-                    text: renameDialog.fileExt
-                    font.pixelSize: Theme.fontSizeMedium
-                    color: Theme.surfaceText
-                    opacity: 0.6
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: text !== ""
+                Component.onCompleted: {
+                    renameDialog.inputField = renameField;
                 }
             }
 
@@ -138,6 +121,7 @@ Popup {
 
                 DankButton {
                     text: i18n("Rename")
+                    buttonHeight: 28
                     backgroundColor: Theme.primary
                     textColor: Theme.primaryText
                     onClicked: renameDialog.performRename()
@@ -145,6 +129,7 @@ Popup {
 
                 DankButton {
                     text: i18n("Cancel")
+                    buttonHeight: 28
                     backgroundColor: Theme.surfaceContainerHigh
                     textColor: Theme.surfaceText
                     onClicked: renameDialog.close()
@@ -168,19 +153,16 @@ Popup {
         renameDialog.oldName = name;
         renameDialog.isDir = !!isDirectory;
 
-        let baseName = name;
-        let extension = "";
-        if (!renameDialog.isDir) {
-            const lastDot = name.lastIndexOf(".");
-            if (lastDot > 0) {
-                baseName = name.substring(0, lastDot);
-                extension = name.substring(lastDot);
-            }
-        }
-        renameDialog.fileExt = extension;
+        renameDialog.fileExt = "";
+
+        // Auto-size width based on full filename text length
+        _dialogMetrics.text = name;
+        let nameW = _dialogMetrics.advanceWidth;
+        let totalW = nameW + 88; // margins + padding + spacings
+        renameDialog.width = Math.max(200, Math.min(420, totalW));
 
         if (renameDialog.inputField) {
-            renameDialog.inputField.text = baseName;
+            renameDialog.inputField.text = name;
         }
         renameDialog.open();
     }

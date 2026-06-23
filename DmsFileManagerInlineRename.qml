@@ -64,7 +64,11 @@ FocusScope {
     // the text field fires editingFinished again as it is torn down.
     property bool _finished: false
 
-    implicitWidth: 200
+    TextMetrics {
+        id: _inlineMetrics
+        font { pixelSize: editor.fontPixelSize }
+    }
+    implicitWidth: Math.max(60, Math.min(360, _inlineMetrics.advanceWidth + 32))
     implicitHeight: Math.round(fontPixelSize + 14)
 
     function _baseName() {
@@ -115,6 +119,7 @@ FocusScope {
 
     Component.onCompleted: {
         _loadPluginTranslations(pluginLanguage);
+        _inlineMetrics.text = editor._baseName();
         Qt.callLater(() => {
             // The editor can be torn down within the same tick (e.g. the item
             // is removed from the model), so the deferred field may be gone.

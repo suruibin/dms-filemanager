@@ -499,13 +499,13 @@ DesktopPluginComponent {
                 return;
             }
 
-            let ext = "";
-            if (!isDir) {
+            let newName = trimmed;
+            // If user typed a name without extension, re-use old extension
+            if (!isDir && trimmed.indexOf(".") === -1) {
                 const lastDot = String(oldName).lastIndexOf(".");
                 if (lastDot > 0)
-                    ext = String(oldName).substring(lastDot);
+                    newName = trimmed + String(oldName).substring(lastDot);
             }
-            const newName = trimmed + ext;
             if (newName === String(oldName))
                 return;
 
@@ -3214,7 +3214,7 @@ DesktopPluginComponent {
                             }
                         },
                         {
-                            text: i18n("Copy Path"),
+                            text: i18n("Copy File Path"),
                             icon: "content_copy",
                             visible: true,
                             action: function() {
@@ -3226,6 +3226,16 @@ DesktopPluginComponent {
                                     ? i18n("Copied %1 paths").arg(root.selectedFilePaths.length)
                                     : i18n("Copied to Clipboard") + ": " + quickMenu.currentName;
                                 ToastService.showToast(label, ToastService.levelInfo);
+                            }
+                        },
+                        {
+                            text: i18n("Copy Dir Path"),
+                            icon: "folder_copy",
+                            visible: true,
+                            action: function() {
+                                quickMenu.close();
+                                let dirPath = root._cleanPath(String(root.targetFolderUrl));
+                                Quickshell.execDetached(["dms", "cl", "copy", dirPath]);
                             }
                         },
                         {
