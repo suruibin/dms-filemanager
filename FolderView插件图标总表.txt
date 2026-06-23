@@ -1,0 +1,148 @@
+FolderView 插件图标总表
+=========================
+使用 DankIcon 组件，基于 Material Design Icons。
+
+
+一、导航与操作栏
+─────────────────
+  menu             侧边栏切换按钮 (☰)                FolderView.qml:1613
+  folder_open      当前文件夹图标                     FolderView.qml:1664
+  arrow_drop_down  文件夹选择器下拉箭头               FolderView.qml:1666
+  arrow_back       后退按钮                           FolderView.qml:1728
+  arrow_upward     回到顶部按钮                       FolderView.qml:1776
+  close            搜索框清除按钮                     FolderView.qml:1883
+  add              新建按钮（文件夹/文件）            FolderView.qml:2010
+  filter_list      筛选按钮                           FolderView.qml:2053
+  settings         设置按钮                           FolderView.qml:2083
+  download         拖放文件提示图标                   FolderView.qml:2646
+
+
+二、视图模式选项（modelData.icon，动态绑定）
+───────────────────────────────────────────────
+  grid_view        网格视图
+  view_list        列表视图
+  view_module      紧凑视图
+
+
+三、新建菜单
+─────────────
+  create_new_folder    新建文件夹
+  note_add             新建文档
+  add_to_home_screen   新建 App
+
+
+四、排序按钮（动态）
+─────────────────────
+  sort_by_alpha    按名称排序
+  schedule         按日期排序
+  bar_chart        按大小排序
+  category         按类型排序
+
+
+五、文件类型筛选
+─────────────────
+  menu             全部文件
+  folder           仅文件夹
+  description      仅文件
+  image            仅图片
+  article          仅文档
+  movie            音视频
+
+
+六、时间筛选
+─────────────
+  schedule         任意时间
+  today            24小时内
+  date_range       7天内
+  calendar_month   30天内
+  history          365天内
+
+
+七、快捷文件夹
+───────────────
+  home             主目录
+  desktop_mac      桌面
+  download         下载
+  music_note       音乐
+  image            图片
+  movie            视频
+  description      文档
+  delete           回收站（Trash）
+
+
+八、右键菜单（快捷菜单）
+─────────────────────────
+  open_in_new          打开
+  app_registration     打开方式...
+  picture_in_picture   浮动文件
+  content_copy         复制 / 复制路径
+  edit                 重命名
+  info                 信息
+  layers               合并到堆叠
+  layers_clear         解组堆叠
+  delete               移到回收站
+
+
+九、右键菜单动态切换
+─────────────────────
+  star / star_outline    已收藏 / 未收藏
+  push_pin               固定（Pin）
+
+
+十、收藏/书签列表
+─────────────────
+  bookmark         书签项
+  push_pin         已固定的项
+  star             收藏项
+  folder           自定义路径
+
+
+十一、文件类型默认图标
+───────────────────────
+  insert_drive_file    普通文件（默认）
+  folder               文件夹
+  description          文件
+
+
+十二、文件夹下拉（folderDropdown）
+───────────────────────────────────
+  folder             文件夹项（默认回退）
+  push_pin           当前 pinned 项高亮
+
+
+十三、设置面板 SectionTitle
+────────────────────────────
+  palette           外观设置
+  language          语言设置
+  menu_book         使用指南
+
+
+十四、设置控件通用（dms-common）
+─────────────────────────────────
+  info              设置项说明 tooltip
+  restart_alt       重置为默认值
+  expand_less       折叠（收起）
+  expand_more       展开（展开）
+  组件: ToggleSettingPlus, SliderSettingPlus, SelectionSettingPlus,
+        ButtonGroupSettingPlus, SectionTitle, DankSliderPlus
+
+
+十五、其他对话框
+─────────────────
+  close             关闭按钮                        CreateAppDialog.qml:167
+  widgets           App 图标加载失败 fallback       CreateAppDialog.qml:298
+  groups            贡献者信息                       PluginAbout.qml:151
+  link              外部链接默认图标                 PluginAbout.qml:234
+  toggle_on         显示 Header 开关（开）          FolderView.qml:2172
+  toggle_off        显示 Header 开关（关）          FolderView.qml:2172
+  visibility        显示隐藏文件（开）              FolderView.qml:3507
+  visibility_off    显示隐藏文件（关）              FolderView.qml:3507
+  search_off        搜索无结果                       FolderView.qml:2584
+
+
+十六、DankSliderPlus 左右图标（由调用方传入，不固定）
+────────────────────────────────────────────────────────
+  slider.leftIcon / slider.rightIcon
+
+
+总计约 55 个唯一图标 ID，全部属于 Material Design Icons 命名体系。

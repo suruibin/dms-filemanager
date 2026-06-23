@@ -1,0 +1,10 @@
+# agent configuration
+.claude/
+.understand-anything/
+
+# runtime caches
+__pycache__/
+*.pyc
+
+# personal assets
+dms-common/assets/Suruibin.jpg
