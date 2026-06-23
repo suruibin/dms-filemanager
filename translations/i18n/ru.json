@@ -11,6 +11,7 @@
   "Bg Opacity": "City BG Opacity",
   "Border Op": "Прозрачность границы",
   "Border Opacity": "Border Opacity",
+  "SideBar Opacity": "Непрозрачность боковой панели",
   "Bottom": "Внизу",
   "Cancel": "Отмена",
   "Choose how files and folders are displayed.": "Выберите способ отображения файлов и папок.",
@@ -60,7 +61,7 @@
   "Header": "Заголовок",
   "Header Position": "Положение шапки сайта",
   "Help us improve": "Помогите нам улучшить",
-  "Home": "Дом",
+  "Home": "Главная",
   "Icon (optional)...": "Иконка",
   "Icon Size": "Размер значка",
   "Image Copied": "Изображение скопировано",
@@ -144,5 +145,6 @@
   "Skip": "Пропустить",
   "Files with the same name already exist in this folder.": "Файлы с таким именем уже существуют в этой папке.",
   "Add to Bookmarks": "Добавить в закладки",
-  "Bookmarked": "Добавлено в закладки"
+  "Bookmarked": "Добавлено в закладки",
+  "Desktop Widgets": "Виджеты рабочего стола"
 }

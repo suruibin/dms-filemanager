@@ -11,6 +11,7 @@
   "Bg Opacity": "BG-Trübung",
   "Border Op": "Rahmen-OP",
   "Border Opacity": "Rahmen Deckkraft",
+  "SideBar Opacity": "Seitenleiste Deckkraft",
   "Bottom": "Unten",
   "Cancel": "Stornieren",
   "Choose how files and folders are displayed.": "Wählen Sie aus, wie Dateien und Ordner angezeigt werden.",
@@ -60,7 +61,7 @@
   "Header": "Kopfzeile",
   "Header Position": "Position",
   "Help us improve": "Helfen Sie uns, uns zu verbessern",
-  "Home": "Heim",
+  "Home": "Home",
   "Icon (optional)...": "Icon (optional)",
   "Icon Size": "Symbolgröße",
   "Image Copied": "Bild kopiert",
@@ -144,5 +145,6 @@
   "Skip": "Überspringen",
   "Files with the same name already exist in this folder.": "Dateien mit demselben Namen existieren bereits in diesem Ordner.",
   "Add to Bookmarks": "Zu Lesezeichen hinzufügen",
-  "Bookmarked": "Lesezeichen hinzugefügt"
+  "Bookmarked": "Lesezeichen hinzugefügt",
+  "Desktop Widgets": "Desktop-Widgets"
 }

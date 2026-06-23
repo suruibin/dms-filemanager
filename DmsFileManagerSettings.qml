@@ -34,10 +34,11 @@ PluginSettings {
         SectionTitle { 
             text: i18n("Appearance")
             icon: "palette" 
-            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
+            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || folderDropdownOpacity.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
             onResetClicked: {
                 backgroundOpacity.resetToDefault();
                 borderOpacity.resetToDefault();
+                folderDropdownOpacity.resetToDefault();
                 cellSize.resetToDefault();
                 viewMode.resetToDefault();
                 headerPosition.resetToDefault();
@@ -67,6 +68,20 @@ PluginSettings {
             settingKey: "borderOpacity"
             label: i18n("Border Opacity")
             defaultValue: 0
+            minimum: 0
+            maximum: 100
+            unit: "%"
+            leftLabel: "0%"
+            rightLabel: "100%"
+        }
+
+        Separator {}
+
+        SliderSettingPlus {
+            id: folderDropdownOpacity
+            settingKey: "folderDropdownOpacity"
+            label: i18n("SideBar Opacity")
+            defaultValue: 95
             minimum: 0
             maximum: 100
             unit: "%"

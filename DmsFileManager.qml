@@ -41,6 +41,7 @@ DesktopPluginComponent {
     // Settings config
     readonly property real backgroundOpacity: (pluginData.backgroundOpacity ?? 80) / 100
     readonly property real borderOpacity: (pluginData.borderOpacity ?? 0) / 100
+    readonly property real folderDropdownOpacity: (pluginData.folderDropdownOpacity ?? 95) / 100
     property bool showHidden: pluginData.showHidden ?? false
     property int cellSize: pluginData.cellSize ?? 84
     readonly property double sizeScale: cellSize / 84.0
@@ -52,6 +53,13 @@ DesktopPluginComponent {
     onPinnedPathsChanged: { updateFilteredModel(); buildFolderDropdownModel(); }
 
     property var folderDropdownModel: []
+
+    // ── Dropdown drag-to-reorder state ──
+    property bool _dropDragActive: false
+    property int _dropDragFromIdx: -1
+    property int _dropDragToIdx: -1
+    property string _dropDragOrderKey: "folderDropdownOrder"
+
     property var stacks: pluginData.stacks ?? []
     onStacksChanged: updateFilteredModel()
     property var expandedStackIds: []
@@ -85,6 +93,19 @@ DesktopPluginComponent {
             var lang = pluginService.loadPluginData(pluginId, "pluginLanguage", "system");
             if (lang !== pluginLanguage)
                 pluginLanguage = lang;
+        }
+    }
+
+    // Poll mounted drives so hot-plugged USB / newly mounted partitions
+    // appear in the folderDropdown without requiring a restart.
+    Timer {
+        id: drivePollTimer
+        interval: 5000
+        repeat: true
+        running: true
+        onTriggered: {
+            if (folderDropdown && (folderDropdown.visible || folderDropdown.opened))
+                buildFolderDropdownModel();
         }
     }
 
@@ -1622,8 +1643,200 @@ DesktopPluginComponent {
             }
         }
 
+        // ── Mounted drives section ──
+        var driveItems = [];
+        try {
+            var mXhr = new XMLHttpRequest();
+            mXhr.open("GET", "file:///proc/mounts", false);
+            mXhr.send();
+            if (mXhr.status === 0 || mXhr.status === 200) {
+                // Collect paths already in the model to avoid duplicates
+                var existingPaths = {};
+                for (var epi = 0; epi < items.length; epi++) {
+                    if (items[epi].path) existingPaths[items[epi].path] = true;
+                }
+
+                var mLines = mXhr.responseText.split("\n");
+                for (var mi = 0; mi < mLines.length; mi++) {
+                    var mL = String(mLines[mi]).trim();
+                    if (mL === "") continue;
+                    var mP = mL.split(/\s+/);
+                    if (mP.length < 2) continue;
+                    var mSrc = mP[0];                     // e.g. /dev/sda1
+                    var mMnt = mP[1];                      // mount point
+                    var mFs = mP[2];                       // filesystem type
+
+                    // Decode octal escapes for spaces: \040 → space
+                    mMnt = mMnt.replace(/\\040/g, " ");
+
+                    // Only physical block devices
+                    if (mSrc.indexOf("/dev/") !== 0) continue;
+
+                    // Skip if already listed (bookmark / pin / favorite / standard)
+                    if (existingPaths[mMnt] !== undefined) continue;
+                    if (mMnt === homePath) continue;
+
+                    // Show only user-visible drives:
+                    //   1. under /mnt/, /media/, /run/media/  (common mount points)
+                    //   2. top-level non-system directories (e.g. /Game, /Data)
+                    var showDrive = false;
+                    var userPrefixes = ["/mnt/", "/media/", "/run/media/"];
+                    for (var pi = 0; pi < userPrefixes.length; pi++) {
+                        if (mMnt.indexOf(userPrefixes[pi]) === 0) { showDrive = true; break; }
+                    }
+                    if (!showDrive && mMnt.charAt(0) === "/" && mMnt.lastIndexOf("/") === 0) {
+                        var sysDirs = ["/", "/boot", "/boot/efi", "/dev", "/proc", "/sys",
+                                       "/tmp", "/run", "/var", "/usr", "/opt", "/home",
+                                       "/root", "/srv", "/etc", "/snap", "/lost+found"];
+                        if (sysDirs.indexOf(mMnt) < 0) showDrive = true;
+                    }
+                    if (!showDrive) continue;
+
+                    // Determine icon by filesystem and location
+                    var dIcon = "hard_drive";
+                    if (mFs === "vfat" || mFs === "exfat" || mFs === "ntfs" || mFs === "fuseblk")
+                        dIcon = "sd_card";
+                    if (mMnt.indexOf("/media/") === 0 || mMnt.indexOf("/run/media/") === 0)
+                        dIcon = "usb";
+
+                    var dName = mMnt.split("/").filter(function(s) { return s !== ""; }).pop() || mMnt;
+                    driveItems.push({ label: dName, value: "drive", icon: dIcon, path: mMnt });
+                }
+            }
+        } catch (e) {}
+
+        if (driveItems.length > 0) {
+            items.push({ value: "separator", icon: "", label: "" });
+            for (var di = 0; di < driveItems.length; di++) {
+                items.push(driveItems[di]);
+            }
+        }
+
         items.push({ label: i18n("Custom..."), value: "custom", icon: "folder" });
-        root.folderDropdownModel = items;
+        root.folderDropdownModel = root._applyDropdownOrder(items);
+    }
+
+    // ── Dropdown drag-reorder helpers ──
+
+    // Unique stable key for a dropdown item (survives model rebuilds)
+    function _itemKey(item) {
+        if (!item || item.value === "separator") return "";
+        if (item.value === "custom") return "custom";
+        if (item.path) return item.value + "|" + item.path;
+        return item.value;
+    }
+
+    // Apply saved custom order to items array
+    function _applyDropdownOrder(items) {
+        var saved = pluginService ? pluginService.loadPluginData(pluginId, _dropDragOrderKey, "") : "";
+        if (!saved || saved === "") return items;
+        try {
+            var order = JSON.parse(saved);
+            if (!Array.isArray(order) || order.length === 0) return items;
+
+            var keyMap = {};
+            for (var i = 0; i < items.length; i++) {
+                var k = root._itemKey(items[i]);
+                if (k !== "") keyMap[k] = items[i];
+            }
+
+            var reordered = [];
+            var used = {};
+            for (var i = 0; i < order.length; i++) {
+                var k = order[i];
+                if (k !== "" && keyMap[k] !== undefined && !used[k]) {
+                    // Always keep "custom" at the end
+                    if (k === "custom") continue;
+                    reordered.push(keyMap[k]);
+                    used[k] = true;
+                }
+            }
+
+            // Append any new items not in saved order (e.g. new bookmarks)
+            for (var i = 0; i < items.length; i++) {
+                var k = root._itemKey(items[i]);
+                if (k !== "" && !used[k]) {
+                    if (k === "custom") continue;
+                    reordered.push(items[i]);
+                    used[k] = true;
+                }
+            }
+
+            // "Custom..." always last
+            if (keyMap["custom"] !== undefined) {
+                reordered.push(keyMap["custom"]);
+            }
+
+            return reordered;
+        } catch (e) {
+            return items;
+        }
+    }
+
+    // Save current dropdown order to plugin data
+    function _saveDropdownOrder() {
+        var model = root.folderDropdownModel;
+        var order = [];
+        for (var i = 0; i < model.length; i++) {
+            var k = root._itemKey(model[i]);
+            if (k !== "") order.push(k);
+        }
+        if (pluginService && order.length > 0)
+            pluginService.savePluginData(pluginId, _dropDragOrderKey, JSON.stringify(order));
+    }
+
+    // Finish a drag operation: swap item in model, save order
+    function _finishDrag() {
+        if (!root._dropDragActive) return;
+        root._dropDragActive = false;
+        folderDropdownFlick.interactive = true;
+
+        var fromIdx = root._dropDragFromIdx;
+        var toIdx = root._dropDragToIdx;
+
+        if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+            var model = root.folderDropdownModel.slice();
+
+            // "Custom..." must always be last — clamp target to before it
+            var lastItem = model[model.length - 1];
+            if (lastItem && lastItem.value === "custom") {
+                if (toIdx >= model.length - 1) toIdx = model.length - 1;
+            }
+
+            var item = model.splice(fromIdx, 1)[0];
+            var insertIdx = toIdx > fromIdx ? toIdx - 1 : toIdx;
+            if (insertIdx > model.length) insertIdx = model.length;
+            model.splice(insertIdx, 0, item);
+            root.folderDropdownModel = model;
+            root._saveDropdownOrder();
+        }
+
+        root._dropDragFromIdx = -1;
+        root._dropDragToIdx = -1;
+    }
+
+    // Calculate target index for drop at given Y in Column coords
+    function _dragTargetIdx(yInColumn) {
+        var model = root.folderDropdownModel;
+        var cumY = 24 + 2; // pin toggle height + Column.spacing
+        for (var i = 0; i < model.length; i++) {
+            var h = model[i].value === "separator" ? 10 : 28;
+            var center = cumY + h / 2;
+            if (yInColumn < center) return i;
+            cumY += h + 2;
+        }
+        return model.length;
+    }
+
+    // Get Y position (in folderDropdownContent coords) for drop indicator at given item index
+    function _dropIndicatorY(itemIdx) {
+        var model = root.folderDropdownModel;
+        var cumY = 24 + 2; // pin toggle height + spacing
+        for (var i = 0; i < itemIdx; i++) {
+            cumY += (model[i].value === "separator" ? 10 : 28) + 2;
+        }
+        var pt = folderDropdownColumn.mapToItem(folderDropdownContent, 0, cumY);
+        return pt.y;
     }
 
     Connections {
@@ -2461,10 +2674,39 @@ DesktopPluginComponent {
                 }
             }
 
+            // Desktop Widgets button (always visible at bottom)
+            Item {
+                id: desktopWidgetsBox
+                anchors.right: settingsBox.left
+                anchors.rightMargin: Theme.spacingS
+                anchors.bottom: parent.bottom
+                width: 20
+                height: 24
+                z: 10
+                opacity: root.showHeader ? 1.0 : (dwBtn.containsMouse ? 1.0 : 0.05)
+                Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
+
+                MouseArea {
+                    id: dwBtn
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: PopoutService.openSettingsWithTab("desktop_widgets")
+
+                    DankIcon {
+                        anchors.centerIn: parent
+                        name: "widgets"
+                        size: 16
+                        color: dwBtn.containsMouse ? Theme.primary : Theme.surfaceText
+                        opacity: dwBtn.containsMouse ? 1.0 : 0.7
+                    }
+                }
+            }
+
             // Settings button (always visible at bottom-right)
             Item {
                 id: settingsBox
-                anchors.right: parent.right
+                anchors.right: parent.right; anchors.rightMargin: 4
                 anchors.bottom: parent.bottom
                 width: 20
                 height: 24
@@ -2504,11 +2746,12 @@ DesktopPluginComponent {
                     background: Rectangle { color: "transparent" }
 
                     contentItem: Rectangle {
-                        color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+                color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
                         radius: Theme.cornerRadius
                         border.color: Theme.withAlpha(Theme.outline, 0.15)
                         border.width: 1
 
+                    
                         Column {
                             id: settingsColumn
                             anchors.fill: parent
@@ -2771,6 +3014,7 @@ DesktopPluginComponent {
                                 }
                             }
                         }
+
                     }
                 }
             }
@@ -3548,7 +3792,8 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            id: folderDropdownContent
+            color: Theme.withAlpha(Theme.surfaceContainer, root.folderDropdownOpacity)
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -3601,12 +3846,18 @@ DesktopPluginComponent {
                         width: parent.width
                         height: modelData.value === "separator" ? 10 : 28
                         radius: Theme.cornerRadius - 2
-                        color: !isSeparator && dropdownItemArea.containsMouse
-                            ? Theme.withAlpha(Theme.primary, 0.15)
-                            : "transparent"
+                        color: {
+                            if (isSeparator) return "transparent";
+                            if (root._dropDragActive && index === root._dropDragFromIdx)
+                                return Theme.withAlpha(Theme.primary, 0.25);
+                            if (dropdownItemArea.containsMouse)
+                                return Theme.withAlpha(Theme.primary, 0.15);
+                            return "transparent";
+                        }
 
-                        readonly property bool isSeparator: modelData.value === "separator"
+                         readonly property bool isSeparator: modelData.value === "separator"
                         readonly property bool isPinned: modelData.value === "pinned" || modelData.value === "bookmark"
+                        readonly property bool isCustom: modelData.value === "custom"
 
                         // Separator line
                         Rectangle {
@@ -3642,7 +3893,7 @@ DesktopPluginComponent {
                                 color: isPinned ? Theme.primary : (root.folderType === modelData.value ? Theme.primary : Theme.surfaceText)
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
-                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : 0) - 20
+                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : 0) - Theme.spacingS
                             }
 
                             // Delete button (favorites + bookmarks)
@@ -3678,6 +3929,8 @@ DesktopPluginComponent {
                                     root.navigateToFolder(modelData.path);
                                 } else if (modelData.value === "favorite") {
                                     root.navigateToFolder(modelData.path);
+                                } else if (modelData.value === "drive") {
+                                    root.navigateToFolder(modelData.path);
                                 } else if (modelData.value === "custom") {
                                     folderPickerDialog.open();
                                 } else {
@@ -3693,12 +3946,61 @@ DesktopPluginComponent {
                                 }
                             }
                         }
+
+                        // Drag-to-reorder grip handle (separate MouseArea overlaying left 16px)
+                        MouseArea {
+                            id: gripDragArea
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 16
+                            visible: !isSeparator && !isCustom
+                            cursorShape: Qt.SizeAllCursor
+                            preventStealing: true
+
+                            onPressed: mouse => {
+                                root._dropDragActive = true;
+                                root._dropDragFromIdx = index;
+                                root._dropDragToIdx = index;
+                                folderDropdownFlick.interactive = false;
+                            }
+
+                            onPositionChanged: mouse => {
+                                if (!root._dropDragActive) return;
+                                var pt = mapToItem(folderDropdownColumn, mouse.x, mouse.y);
+                                var targetIdx = root._dragTargetIdx(pt.y);
+                                if (targetIdx !== root._dropDragToIdx) {
+                                    root._dropDragToIdx = targetIdx;
+                                    dropIndicator.y = root._dropIndicatorY(targetIdx);
+                                }
+                            }
+
+                            onReleased: {
+                                root._finishDrag();
+                                dropIndicator.y = 0;
+                            }
+                        }
                     }
                 }
-            }
-                }
+    }
+        }
+
+        // Drop indicator overlay for drag-to-reorder
+        Rectangle {
+            id: dropIndicator
+            visible: root._dropDragActive
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: Theme.spacingS
+            anchors.rightMargin: Theme.spacingS
+            height: 2
+            y: 0
+            color: Theme.primary
+            radius: 1
+            z: 10
         }
     }
+}
 
     // Create Dropdown Popup
     Popup {

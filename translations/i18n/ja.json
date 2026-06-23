@@ -11,6 +11,7 @@
   "Bg Opacity": "自己紹介の背景透過率",
   "Border Op": "ボーダー・オペレーション",
   "Border Opacity": "ボーダーの不透明度",
+  "SideBar Opacity": "サイドバーの不透明度",
   "Bottom": "下部",
   "Cancel": "キャンセル",
   "Choose how files and folders are displayed.": "ファイルとフォルダの表示方法を選択します。",
@@ -144,5 +145,6 @@
   "Skip": "スキップ",
   "Files with the same name already exist in this folder.": "同じ名前のファイルがこのフォルダーに既に存在します。",
   "Add to Bookmarks": "ブックマークに追加",
-  "Bookmarked": "ブックマーク済み"
+  "Bookmarked": "ブックマーク済み",
+  "Desktop Widgets": "デスクトップウィジェット"
 }

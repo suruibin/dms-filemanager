@@ -11,6 +11,7 @@
   "Bg Opacity": "Độ mờ Bg",
   "Border Op": "Độ mờ viền",
   "Border Opacity": "Border Opacity",
+  "SideBar Opacity": "Độ mờ thanh bên",
   "Bottom": "Dưới cùng",
   "Cancel": "Hủy bỏ",
   "Choose how files and folders are displayed.": "Chọn cách hiển thị các tập tin và thư mục.",
@@ -60,7 +61,7 @@
   "Header": "Tiêu đề",
   "Header Position": "Vị Trí Header",
   "Help us improve": "Hãy giúp chúng tôi cải thiện",
-  "Home": "Trang chủ",
+  "Home": "Thư mục chính",
   "Icon (optional)...": "Biểu tượng (tùy chọn)...",
   "Icon Size": "Kích thước biểu tượng",
   "Image Copied": "Đã sao chép hình ảnh",
@@ -144,5 +145,6 @@
   "Skip": "Bỏ qua",
   "Files with the same name already exist in this folder.": "Tệp trùng tên đã tồn tại trong thư mục này.",
   "Add to Bookmarks": "Thêm vào Dấu trang",
-  "Bookmarked": "Đã đánh dấu"
+  "Bookmarked": "Đã đánh dấu",
+  "Desktop Widgets": "Tiện ích màn hình"
 }
