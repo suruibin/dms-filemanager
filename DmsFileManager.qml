@@ -13,6 +13,7 @@ import qs.Modules.Plugins
 import QtQuick.Dialogs
 import QtMultimedia
 import "./dms-common"
+import "./components"
 
 DesktopPluginComponent {
     id: root

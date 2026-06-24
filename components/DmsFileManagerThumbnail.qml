@@ -3,7 +3,7 @@ import Quickshell
 import qs.Common
 import qs.Widgets
 import qs.Services
-import "./dms-common"
+import "../dms-common"
 
 Item {
     id: root

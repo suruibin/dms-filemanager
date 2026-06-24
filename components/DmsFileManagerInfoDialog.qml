@@ -5,7 +5,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Widgets
 import qs.Services
-import "./dms-common"
+import "../dms-common"
 
 Popup {
     id: infoDialog
@@ -54,7 +54,7 @@ Popup {
         // Reset before loading new file so stale translations aren't shown
         infoDialog._pluginFlatTranslations = ({});
         infoDialog._pluginI18nReady = false;
-        pluginI18nLoader.path = Qt.resolvedUrl("translations/i18n/" + locale + ".json");
+        pluginI18nLoader.path = Qt.resolvedUrl("../translations/i18n/" + locale + ".json");
     }
 
     function i18n(term, context) {

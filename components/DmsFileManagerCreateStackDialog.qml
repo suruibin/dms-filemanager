@@ -1,14 +1,16 @@
 import QtQuick
 import QtQuick.Controls
+import Quickshell
 import Quickshell.Io
 import qs.Common
 import qs.Widgets
-import "./dms-common"
+import qs.Services
+import "../dms-common"
 
 Popup {
-    id: renameDialog
+    id: createStackDialog
     width: 260
-    height: 100
+    height: 156
     padding: 0
     modal: false
     focus: true
@@ -21,16 +23,8 @@ Popup {
     x: parent ? Math.round((parent.width - width) / 2) : 0
     y: parent ? Math.round((parent.height - height) / 2) : 0
 
-    property string filePath: ""
-    property string oldName: ""
-    property string fileExt: ""
-    property bool isDir: false
+    property var selectedPaths: []
     property var inputField: null
-
-    TextMetrics {
-        id: _dialogMetrics
-        font.pixelSize: Theme.fontSizeMedium
-    }
 
     // ── Plugin I18n ──────────────────────────────────────────────────────────
     property var _pluginFlatTranslations: ({})
@@ -44,12 +38,12 @@ Popup {
         if (locale === "System Default" || locale === "") locale = "system";
         if (locale === "system") locale = "en";
         if (!locale) {
-            renameDialog._pluginFlatTranslations = ({});
-            renameDialog._pluginI18nReady = false;
+            createStackDialog._pluginFlatTranslations = ({});
+            createStackDialog._pluginI18nReady = false;
             __i18nTick++;
             return;
         }
-        pluginI18nLoader.path = Qt.resolvedUrl("translations/i18n/" + locale + ".json");
+        pluginI18nLoader.path = Qt.resolvedUrl("../translations/i18n/" + locale + ".json");
     }
 
     function i18n(term, context) {
@@ -64,15 +58,15 @@ Popup {
         id: pluginI18nLoader
         onLoaded: {
             try {
-                renameDialog._pluginFlatTranslations = JSON.parse(text());
-                renameDialog._pluginI18nReady = true;
-                renameDialog.__i18nTick++;
+                createStackDialog._pluginFlatTranslations = JSON.parse(text());
+                createStackDialog._pluginI18nReady = true;
+                createStackDialog.__i18nTick++;
             } catch (e) {
-                console.warn("RenameDialog I18n: error parsing:", e);
+                console.warn("CreateStackDialog I18n: error parsing:", e);
             }
         }
         onLoadFailed: error => {
-            console.warn("RenameDialog I18n: failed to load:", error);
+            console.warn("CreateStackDialog I18n: failed to load:", error);
         }
     }
 
@@ -80,9 +74,9 @@ Popup {
 
     onOpened: {
         Qt.callLater(() => {
-            if (renameDialog.inputField) {
-                renameDialog.inputField.forceActiveFocus();
-                renameDialog.inputField.selectAll();
+            if (createStackDialog.inputField) {
+                createStackDialog.inputField.forceActiveFocus();
+                createStackDialog.inputField.selectAll();
             }
         });
     }
@@ -102,15 +96,27 @@ Popup {
             anchors.margins: Theme.spacingM
             spacing: Theme.spacingS
 
-            DankTextField {
-                id: renameField
-                width: parent.width
-                placeholderText: i18n("Enter new name...")
-                focus: true
-                onAccepted: renameDialog.performRename()
+            StyledText {
+                text: i18n("Create Stack")
+                font.bold: true
+                font.pixelSize: Theme.fontSizeMedium
+                color: Theme.surfaceText
+            }
 
-                Component.onCompleted: {
-                    renameDialog.inputField = renameField;
+            Row {
+                width: parent.width
+                spacing: Theme.spacingS
+
+                DankTextField {
+                    id: stackNameField
+                    width: parent.width
+                    placeholderText: i18n("Stack name...")
+                    focus: true
+                    onAccepted: createStackDialog.performCreate()
+
+                    Component.onCompleted: {
+                        createStackDialog.inputField = stackNameField;
+                    }
                 }
             }
 
@@ -120,57 +126,42 @@ Popup {
                 layoutDirection: Qt.RightToLeft
 
                 DankButton {
-                    text: i18n("Rename")
-                    buttonHeight: 28
+                    text: i18n("Create")
                     backgroundColor: Theme.primary
                     textColor: Theme.primaryText
-                    onClicked: renameDialog.performRename()
+                    onClicked: createStackDialog.performCreate()
                 }
 
                 DankButton {
                     text: i18n("Cancel")
-                    buttonHeight: 28
                     backgroundColor: Theme.surfaceContainerHigh
                     textColor: Theme.surfaceText
-                    onClicked: renameDialog.close()
+                    onClicked: createStackDialog.close()
                 }
             }
         }
     }
 
-    function showFor(path, name, isDirectory) {
-        let cleanPath = String(path);
-        let isVirtualStack = cleanPath.startsWith("stack://");
-        if (!isVirtualStack) {
-            if (cleanPath.startsWith("file://")) {
-                cleanPath = cleanPath.substring(7);
-            }
-            if (cleanPath.startsWith("localhost/")) {
-                cleanPath = cleanPath.substring(9);
-            }
+    function showFor(paths) {
+        createStackDialog.selectedPaths = paths || [];
+        if (createStackDialog.inputField) {
+            createStackDialog.inputField.text = "New Stack";
         }
-        renameDialog.filePath = cleanPath;
-        renameDialog.oldName = name;
-        renameDialog.isDir = !!isDirectory;
-
-        renameDialog.fileExt = "";
-
-        // Auto-size width based on full filename text length
-        _dialogMetrics.text = name;
-        let nameW = _dialogMetrics.advanceWidth;
-        let totalW = nameW + 88; // margins + padding + spacings
-        renameDialog.width = Math.max(200, Math.min(420, totalW));
-
-        if (renameDialog.inputField) {
-            renameDialog.inputField.text = name;
-        }
-        renameDialog.open();
+        createStackDialog.open();
     }
 
-    function performRename() {
-        if (renameDialog.inputField && parent && typeof parent.applyRename === "function") {
-            parent.applyRename(renameDialog.filePath, renameDialog.oldName, renameDialog.isDir, renameDialog.inputField.text);
+    function performCreate() {
+        if (!createStackDialog.inputField) {
+            createStackDialog.close();
+            return;
         }
-        renameDialog.close();
+        const name = createStackDialog.inputField.text.trim();
+        if (name.length === 0) {
+            createStackDialog.close();
+            return;
+        }
+
+        root.createStack(name, createStackDialog.selectedPaths);
+        createStackDialog.close();
     }
 }

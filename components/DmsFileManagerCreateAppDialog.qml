@@ -6,7 +6,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Widgets
 import qs.Services
-import "./dms-common"
+import "../dms-common"
 
 Popup {
     id: createAppDialog
@@ -41,7 +41,7 @@ Popup {
             __i18nTick++;
             return;
         }
-        pluginI18nLoader.path = Qt.resolvedUrl("translations/i18n/" + locale + ".json");
+        pluginI18nLoader.path = Qt.resolvedUrl("../translations/i18n/" + locale + ".json");
     }
 
     function i18n(term, context) {
