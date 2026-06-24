@@ -2781,7 +2781,7 @@ DesktopPluginComponent {
 
                             // Border Opacity
                             Row { width: parent.width; height: 24; spacing: Theme.spacingS
-                                StyledText { text: i18n("Border Op"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 85; anchors.verticalCenter: parent.verticalCenter }
+                                StyledText { text: i18n("Border Opacity"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 85; anchors.verticalCenter: parent.verticalCenter }
                                 Item { width: parent.width - 85 - 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
                                     Slider {
                                         id: borderSlider; anchors.verticalCenter: parent.verticalCenter; width: parent.width
@@ -2790,6 +2790,19 @@ DesktopPluginComponent {
                                     }
                                 }
                                 StyledText { text: Math.round(borderSlider.value) + "%"; font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceText; width: 35; anchors.verticalCenter: parent.verticalCenter }
+                            }
+
+                            // SideBar Opacity
+                            Row { width: parent.width; height: 24; spacing: Theme.spacingS
+                                StyledText { text: i18n("SideBar Opacity"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 85; anchors.verticalCenter: parent.verticalCenter }
+                                Item { width: parent.width - 85 - 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
+                                    Slider {
+                                        id: sbSlider; anchors.verticalCenter: parent.verticalCenter; width: parent.width
+                                        from: 0; to: 100; value: pluginData.folderDropdownOpacity ?? 95
+                                        onMoved: { if (pluginService) pluginService.savePluginData(pluginId, "folderDropdownOpacity", Math.round(value)) }
+                                    }
+                                }
+                                StyledText { text: Math.round(sbSlider.value) + "%"; font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceText; width: 35; anchors.verticalCenter: parent.verticalCenter }
                             }
 
                             // Header Position
