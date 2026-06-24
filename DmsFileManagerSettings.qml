@@ -53,7 +53,7 @@ PluginSettings {
             id: backgroundOpacity
             settingKey: "backgroundOpacity"
             label: i18n("Background Opacity")
-            defaultValue: 80
+            defaultValue: 0
             minimum: 0
             maximum: 100
             unit: "%"
@@ -67,7 +67,7 @@ PluginSettings {
             id: borderOpacity
             settingKey: "borderOpacity"
             label: i18n("Border Opacity")
-            defaultValue: 0
+            defaultValue: 100
             minimum: 0
             maximum: 100
             unit: "%"
@@ -96,7 +96,7 @@ PluginSettings {
             settingKey: "cellSize"
             label: i18n("Icon Size")
             description: i18n("Adjust the size of file and folder icons.")
-            defaultValue: 84
+            defaultValue: 94
             minimum: 64
             maximum: 128
             unit: "px"
@@ -129,7 +129,7 @@ PluginSettings {
                 { label: "Top",    value: "top"    },
                 { label: "Bottom", value: "bottom" }
             ]
-            defaultValue: "top"
+            defaultValue: "bottom"
             translateMap: root._i18nMap
             translateToken: root._i18nToken
         }
@@ -328,7 +328,7 @@ PluginSettings {
         SelectionSettingPlus {
             settingKey: "pluginLanguage"
             label: i18n("Language")
-            defaultValue: "system"
+            defaultValue: "en"
             options: [
                 { label: i18n("System Default"), value: "system" },
                 { label: "中文", value: "zh_CN" },

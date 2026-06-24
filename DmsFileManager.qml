@@ -36,19 +36,19 @@ DesktopPluginComponent {
     minHeight: 200
     
     // Default initial size if not set
-    widgetWidth: pluginData.widgetWidth ?? 320
-    widgetHeight: pluginData.widgetHeight ?? 400
+    widgetWidth: pluginData.widgetWidth ?? 937
+    widgetHeight: pluginData.widgetHeight ?? 503
 
     // Settings config
-    readonly property real backgroundOpacity: (pluginData.backgroundOpacity ?? 80) / 100
-    readonly property real borderOpacity: (pluginData.borderOpacity ?? 0) / 100
+    readonly property real backgroundOpacity: (pluginData.backgroundOpacity ?? 0) / 100
+    readonly property real borderOpacity: (pluginData.borderOpacity ?? 100) / 100
     readonly property real folderDropdownOpacity: (pluginData.folderDropdownOpacity ?? 95) / 100
     property bool showHidden: pluginData.showHidden ?? false
-    property int cellSize: pluginData.cellSize ?? 84
+    property int cellSize: pluginData.cellSize ?? 94
     readonly property double sizeScale: cellSize / 84.0
-    readonly property string sortBy: pluginData.sortBy ?? "name"
+    readonly property string sortBy: pluginData.sortBy ?? "type"
     readonly property string viewMode: pluginData.viewMode ?? "grid"
-    readonly property string headerPosition: pluginData.headerPosition ?? "top"
+    readonly property string headerPosition: pluginData.headerPosition ?? "bottom"
     property bool showHeader: pluginData.showHeader ?? true
     readonly property var pinnedPaths: pluginData.pinnedPaths ?? []
     onPinnedPathsChanged: { updateFilteredModel(); buildFolderDropdownModel(); }
@@ -66,7 +66,7 @@ DesktopPluginComponent {
     property var expandedStackIds: []
 
     // ── Plugin I18n ──────────────────────────────────────────────────────────────
-    property string pluginLanguage: pluginData.pluginLanguage ?? "system"
+    property string pluginLanguage: pluginData.pluginLanguage ?? "en"
     onPluginLanguageChanged: {
         _applyPluginLanguage(pluginLanguage);
         buildFolderDropdownModel();
@@ -157,7 +157,7 @@ DesktopPluginComponent {
         : false
 
     // Resolved Folder Settings & URL
-    property string folderType: pluginData.folderType ?? "desktop"
+    property string folderType: pluginData.folderType ?? "home"
     property string customFolderPath: pluginData.customFolderPath ?? ""
 
     readonly property string targetFolderUrl: {
@@ -232,8 +232,8 @@ DesktopPluginComponent {
     property string lastSelectedFilePath: ""
     property string searchPattern: ""
     property string selectedFileInfo: ""
-    property string emptyColor: pluginData.emptyColor ?? "#FF1744"
-    property string folderColor: pluginData.folderColor ?? ""
+    property string emptyColor: pluginData.emptyColor ?? "#00BFA5"
+    property string folderColor: pluginData.folderColor ?? "#00BCD4"
     readonly property var favoritePaths: pluginData.favoritePaths ?? []
     onFavoritePathsChanged: buildFolderDropdownModel()
 
@@ -2772,7 +2772,7 @@ DesktopPluginComponent {
                                 Item { width: parent.width - 85 - 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
                                     Slider {
                                         id: bgSlider; anchors.verticalCenter: parent.verticalCenter; width: parent.width
-                                        from: 0; to: 100; value: pluginData.backgroundOpacity ?? 80
+                                        from: 0; to: 100; value: pluginData.backgroundOpacity ?? 0
                                         onMoved: { if (pluginService) pluginService.savePluginData(pluginId, "backgroundOpacity", Math.round(value)) }
                                     }
                                 }
@@ -2785,7 +2785,7 @@ DesktopPluginComponent {
                                 Item { width: parent.width - 85 - 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
                                     Slider {
                                         id: borderSlider; anchors.verticalCenter: parent.verticalCenter; width: parent.width
-                                        from: 0; to: 100; value: pluginData.borderOpacity ?? 0
+                                        from: 0; to: 100; value: pluginData.borderOpacity ?? 100
                                         onMoved: { if (pluginService) pluginService.savePluginData(pluginId, "borderOpacity", Math.round(value)) }
                                     }
                                 }
@@ -3773,7 +3773,7 @@ DesktopPluginComponent {
     property int _pathCompletionIndex: -1
 
     // Folder Switcher Dropdown Popup
-    property bool sidebarPinned: pluginData.sidebarPinned ?? false
+    property bool sidebarPinned: pluginData.sidebarPinned ?? true
     onSidebarPinnedChanged: { if (pluginService) pluginService.savePluginData(pluginId, "sidebarPinned", sidebarPinned); }
     Popup {
         id: folderDropdown
