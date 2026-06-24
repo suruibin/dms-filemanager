@@ -11,6 +11,8 @@
 ## 安装
 
 ```bash
+dms plugins install dmsfilemanager
+或者
 git clone https://github.com/suruibin/dms-filemanager ~/.config/DankMaterialShell/plugins/dms-filemanager
 ```
 
