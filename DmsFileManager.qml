@@ -4397,6 +4397,11 @@ DesktopPluginComponent {
     }
 
     // ── File Preview Popup (Space key) ────────────────────────────────────────
+    Shortcut {
+        sequence: "Ctrl+S"
+        enabled: previewPopup.opened && previewPopup.isText
+        onActivated: previewPopup._saveTextFile()
+    }
     Popup {
         id: previewPopup
         width: root.width
@@ -4495,6 +4500,28 @@ DesktopPluginComponent {
         property string _transitionEffect: "random"
         property string _effectiveTransition: ""
         readonly property var _availableEffects: ["none", "fade", "wipe", "disc", "stripes", "iris bloom", "pixelate", "portal", "wave", "mosaic", "diamond", "glitch", "random"]
+
+        function _saveTextFile() {
+            if (!isText) return;
+            var content = _textContent || "";
+            var fpath = filePath;
+            // Escape content for Python single-quoted string literal
+            var escaped = content
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/\t/g, "\\t")
+                .replace(/\f/g, "\\f");
+            Quickshell.execDetached(["python3", "-c",
+                "open('" + fpath.replace(/'/g, "'\\''") + "','w').write('" + escaped + "')"
+            ]);
+        }
+
+        Shortcut {
+            sequence: "Ctrl+S"
+            onActivated: previewPopup._saveTextFile()
+        }
 
         Timer {
             id: slideshowTimer
@@ -4624,14 +4651,6 @@ DesktopPluginComponent {
                 }
             }
 
-            function _saveTextFile() {
-                if (!previewPopup.isText) return;
-                var content = previewPopup._textContent || "";
-                var filePath = previewPopup.filePath;
-                Quickshell.execDetached(["python3", "-c", 
-                    "open('" + filePath.replace(/'/g, "'\\''") + "','w').write('" + content.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "')"
-                ]);
-            }
             // FileView — non-visual data loader, sibling of preview pages
             FileView {
                 id: textFileLoader
