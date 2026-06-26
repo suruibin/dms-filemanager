@@ -1749,6 +1749,33 @@ DesktopPluginComponent {
             pluginService.savePluginData(pluginId, _dropDragOrderKey, JSON.stringify(order));
     }
 
+    // Clamp drag target index to respect section boundaries
+    function _clampDragTarget(fromIdx, targetIdx) {
+        var model = root.folderDropdownModel;
+        var fromItem = fromIdx >= 0 && fromIdx < model.length ? model[fromIdx] : null;
+        if (!fromItem) return targetIdx;
+
+        // Find "Drives" entry index
+        var drivesIdx = -1;
+        for (var i = 0; i < model.length; i++) {
+            if (model[i].value === "drives") {
+                drivesIdx = i;
+                break;
+            }
+        }
+        if (drivesIdx < 0) return targetIdx;
+
+        // Mounted drives cannot be dragged above "Drives" entry
+        if (fromItem.value === "drive" && targetIdx <= drivesIdx)
+            return drivesIdx + 1;
+
+        // Bookmarks and Favorites cannot be dragged below "Drives" entry
+        if ((fromItem.value === "bookmark" || fromItem.value === "favorite") && targetIdx > drivesIdx)
+            return drivesIdx;
+
+        return targetIdx;
+    }
+
     // Finish a drag operation: swap item in model, save order
     function _finishDrag() {
         if (!root._dropDragActive) return;
@@ -1756,7 +1783,7 @@ DesktopPluginComponent {
         folderDropdownFlick.interactive = true;
 
         var fromIdx = root._dropDragFromIdx;
-        var toIdx = root._dropDragToIdx;
+        var toIdx = root._clampDragTarget(root._dropDragFromIdx, root._dropDragToIdx);
 
         if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
             var model = root.folderDropdownModel.slice();
@@ -3970,6 +3997,7 @@ DesktopPluginComponent {
                                 if (!root._dropDragActive) return;
                                 var pt = mapToItem(folderDropdownColumn, mouse.x, mouse.y);
                                 var targetIdx = root._dragTargetIdx(pt.y);
+                                targetIdx = root._clampDragTarget(root._dropDragFromIdx, targetIdx);
                                 if (targetIdx !== root._dropDragToIdx) {
                                     root._dropDragToIdx = targetIdx;
                                     dropIndicator.y = root._dropIndicatorY(targetIdx);
