@@ -110,6 +110,15 @@ DesktopPluginComponent {
         }
     }
 
+    // Background lsblk scan for unmounted drive detection
+    Timer {
+        id: driveScanTimer
+        interval: 6000
+        repeat: true
+        running: true
+        onTriggered: { lsblkProc.running = true; }
+    }
+
     // Model arrays that auto-rebuild when translations change (non-readonly so i18n()
     // bindings re-evaluate when _pluginFlatTranslations or I18n.translations change)
     property var _viewModeOptions: [
@@ -159,6 +168,10 @@ DesktopPluginComponent {
     // Resolved Folder Settings & URL
     property string folderType: pluginData.folderType ?? "home"
     property string customFolderPath: pluginData.customFolderPath ?? ""
+    // Set to true when browsing a mounted drive partition (from driveListPopup)
+    property bool _isOnDrive: false
+    // Current drive info (label, path, icon) for showing drive entry in folderDropdown
+    property var _currentDriveInfo: ({})
 
     readonly property string targetFolderUrl: {
         switch (folderType) {
@@ -638,6 +651,7 @@ DesktopPluginComponent {
     property var forwardHistory: []
     function resolveStandardFolderPath(type) {
         switch (type) {
+            case "root": return "/";
             case "home": return Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation).toString();
             case "desktop": return Platform.StandardPaths.writableLocation(Platform.StandardPaths.DesktopLocation).toString();
             case "downloads": return Platform.StandardPaths.writableLocation(Platform.StandardPaths.DownloadLocation).toString();
@@ -674,6 +688,7 @@ DesktopPluginComponent {
         }
         root.customFolderPath = cleanPath;
         root.folderType = "custom";
+        buildFolderDropdownModel();
     }
 
     function goBackFolder() {
@@ -697,6 +712,7 @@ DesktopPluginComponent {
             }
             root.customFolderPath = prev;
             root.folderType = "custom";
+            buildFolderDropdownModel();
         }
     }
 
@@ -721,6 +737,7 @@ DesktopPluginComponent {
             }
             root.customFolderPath = next;
             root.folderType = "custom";
+            buildFolderDropdownModel();
         }
     }
 
@@ -1130,6 +1147,8 @@ DesktopPluginComponent {
     Component.onCompleted: {
         buildFolderDropdownModel();
         _applyPluginLanguage(pluginLanguage);
+        // Kick off initial lsblk scan
+        Qt.callLater(function() { lsblkProc.running = true; });
     }
 
     ListModel {
@@ -1550,6 +1569,7 @@ DesktopPluginComponent {
     function buildFolderDropdownModel() {
         var items = [
             { label: i18n("Home"), value: "home", icon: "home" },
+            { label: i18n("Root"), value: "root", icon: "storage" },
             { label: i18n("Desktop"), value: "desktop", icon: "desktop_mac" },
             { label: i18n("Downloads"), value: "downloads", icon: "download" },
             { label: i18n("Music"), value: "music", icon: "music_note" },
@@ -1626,76 +1646,46 @@ DesktopPluginComponent {
             }
         }
 
-        // ── Mounted drives section ──
-        var driveItems = [];
-        try {
-            var mXhr = new XMLHttpRequest();
-            mXhr.open("GET", "file:///proc/mounts", false);
-            mXhr.send();
-            if (mXhr.status === 0 || mXhr.status === 200) {
-                // Collect paths already in the model to avoid duplicates
-                var existingPaths = {};
-                for (var epi = 0; epi < items.length; epi++) {
-                    if (items[epi].path) existingPaths[items[epi].path] = true;
-                }
+        // Drives section — opens a sub-popup with mountable partitions
+        items.push({ value: "separator", icon: "", label: "" });
+        items.push({ label: i18n("Drives"), value: "drives", icon: "hard_drive" });
 
-                var mLines = mXhr.responseText.split("\n");
-                for (var mi = 0; mi < mLines.length; mi++) {
-                    var mL = String(mLines[mi]).trim();
-                    if (mL === "") continue;
-                    var mP = mL.split(/\s+/);
-                    if (mP.length < 2) continue;
-                    var mSrc = mP[0];                     // e.g. /dev/sda1
-                    var mMnt = mP[1];                      // mount point
-                    var mFs = mP[2];                       // filesystem type
-
-                    // Decode octal escapes for spaces: \040 → space
-                    mMnt = mMnt.replace(/\\040/g, " ");
-
-                    // Only physical block devices
-                    if (mSrc.indexOf("/dev/") !== 0) continue;
-
-                    // Skip if already listed (bookmark / pin / favorite / standard)
-                    if (existingPaths[mMnt] !== undefined) continue;
-                    if (mMnt === homePath) continue;
-
-                    // Show only user-visible drives:
-                    //   1. under /mnt/, /media/, /run/media/  (common mount points)
-                    //   2. top-level non-system directories (e.g. /Game, /Data)
-                    var showDrive = false;
-                    var userPrefixes = ["/mnt/", "/media/", "/run/media/"];
-                    for (var pi = 0; pi < userPrefixes.length; pi++) {
-                        if (mMnt.indexOf(userPrefixes[pi]) === 0) { showDrive = true; break; }
-                    }
-                    if (!showDrive && mMnt.charAt(0) === "/" && mMnt.lastIndexOf("/") === 0) {
-                        var sysDirs = ["/", "/boot", "/boot/efi", "/dev", "/proc", "/sys",
-                                       "/tmp", "/run", "/var", "/usr", "/opt", "/home",
-                                       "/root", "/srv", "/etc", "/snap", "/lost+found"];
-                        if (sysDirs.indexOf(mMnt) < 0) showDrive = true;
-                    }
-                    if (!showDrive) continue;
-
-                    // Determine icon by filesystem and location
-                    var dIcon = "hard_drive";
-                    if (mFs === "vfat" || mFs === "exfat" || mFs === "ntfs" || mFs === "fuseblk")
-                        dIcon = "sd_card";
-                    if (mMnt.indexOf("/media/") === 0 || mMnt.indexOf("/run/media/") === 0)
-                        dIcon = "usb";
-
-                    var dName = mMnt.split("/").filter(function(s) { return s !== ""; }).pop() || mMnt;
-                    driveItems.push({ label: dName, value: "drive", icon: dIcon, path: mMnt });
-                }
+        // Mounted drives — show all mounted partitions directly in the dropdown
+        var _curPath = root.customFolderPath;
+        root._isOnDrive = false;
+        for (var _di = 0; _di < root._driveEntries.length; _di++) {
+            var _de = root._driveEntries[_di];
+            if (_de.mounted && _de.path && _de.path !== "") {
+                // Check if current folder is inside this drive (for highlighting)
+                if (!root._isOnDrive && _curPath && (_curPath === _de.path || _curPath.startsWith(_de.path + "/")))
+                    root._isOnDrive = true;
+                items.push({
+                    label: _de.label,
+                    value: "drive",
+                    path: _de.path,
+                    icon: _de.icon || "hard_drive",
+                    mounted: true,
+                    device: _de.device || ""
+                });
             }
-        } catch (e) {}
-
-        if (driveItems.length > 0) {
-            items.push({ value: "separator", icon: "", label: "" });
-            for (var di = 0; di < driveItems.length; di++) {
-                items.push(driveItems[di]);
+        }
+        // Fallback: if current path matches a drive but _driveEntries wasn't populated yet
+        if (!root._isOnDrive && root._currentDriveInfo && root._currentDriveInfo.path) {
+            if (_curPath && (_curPath === root._currentDriveInfo.path || _curPath.startsWith(root._currentDriveInfo.path + "/"))) {
+                root._isOnDrive = true;
+                items.push({
+                    label: root._currentDriveInfo.label,
+                    value: "drive",
+                    path: root._currentDriveInfo.path,
+                    icon: root._currentDriveInfo.icon || "hard_drive",
+                    mounted: true,
+                    device: ""
+                });
+            } else {
+                root._currentDriveInfo = ({});
             }
         }
 
-        items.push({ label: i18n("Custom..."), value: "custom", icon: "folder" });
         root.folderDropdownModel = root._applyDropdownOrder(items);
     }
 
@@ -1704,7 +1694,6 @@ DesktopPluginComponent {
     // Unique stable key for a dropdown item (survives model rebuilds)
     function _itemKey(item) {
         if (!item || item.value === "separator") return "";
-        if (item.value === "custom") return "custom";
         if (item.path) return item.value + "|" + item.path;
         return item.value;
     }
@@ -1728,8 +1717,6 @@ DesktopPluginComponent {
             for (var i = 0; i < order.length; i++) {
                 var k = order[i];
                 if (k !== "" && keyMap[k] !== undefined && !used[k]) {
-                    // Always keep "custom" at the end
-                    if (k === "custom") continue;
                     reordered.push(keyMap[k]);
                     used[k] = true;
                 }
@@ -1739,15 +1726,9 @@ DesktopPluginComponent {
             for (var i = 0; i < items.length; i++) {
                 var k = root._itemKey(items[i]);
                 if (k !== "" && !used[k]) {
-                    if (k === "custom") continue;
                     reordered.push(items[i]);
                     used[k] = true;
                 }
-            }
-
-            // "Custom..." always last
-            if (keyMap["custom"] !== undefined) {
-                reordered.push(keyMap["custom"]);
             }
 
             return reordered;
@@ -1779,12 +1760,6 @@ DesktopPluginComponent {
 
         if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
             var model = root.folderDropdownModel.slice();
-
-            // "Custom..." must always be last — clamp target to before it
-            var lastItem = model[model.length - 1];
-            if (lastItem && lastItem.value === "custom") {
-                if (toIdx >= model.length - 1) toIdx = model.length - 1;
-            }
 
             var item = model.splice(fromIdx, 1)[0];
             var insertIdx = toIdx > fromIdx ? toIdx - 1 : toIdx;
@@ -3300,6 +3275,7 @@ DesktopPluginComponent {
                         }
                     }
                 }
+
             }
         }
     }
@@ -3854,6 +3830,7 @@ DesktopPluginComponent {
                          readonly property bool isSeparator: modelData.value === "separator"
                         readonly property bool isPinned: modelData.value === "pinned" || modelData.value === "bookmark"
                         readonly property bool isCustom: modelData.value === "custom"
+                        readonly property bool isActiveDrive: modelData.value === "drive" && root.customFolderPath && modelData.path && (root.customFolderPath === modelData.path || root.customFolderPath.startsWith(modelData.path + "/"))
 
                         // Separator line
                         Rectangle {
@@ -3878,18 +3855,18 @@ DesktopPluginComponent {
                             DankIcon {
                                 name: modelData.icon || "folder"
                                 size: 14
-                                color: isPinned ? Theme.primary : (root.folderType === modelData.value ? Theme.primary : Theme.surfaceText)
+                                color: isPinned ? Theme.primary : ((root.folderType === modelData.value || isActiveDrive || (modelData.value === "drives" && root._isOnDrive)) ? Theme.primary : Theme.surfaceText)
                                 anchors.verticalCenter: parent.verticalCenter
                             }
 
                             StyledText {
                                 text: modelData.label
                                 font.pixelSize: Theme.fontSizeSmall
-                                font.bold: isPinned || (root.folderType === modelData.value && !isCustom)
-                                color: isPinned ? Theme.primary : (root.folderType === modelData.value && !isCustom ? "#4CAF50" : Theme.surfaceText)
+                                font.bold: isPinned || (root.folderType === modelData.value && !isCustom) || isActiveDrive || (modelData.value === "drives" && root._isOnDrive)
+                                color: isPinned ? Theme.primary : ((root.folderType === modelData.value && !isCustom) || isActiveDrive || (modelData.value === "drives" && root._isOnDrive) ? root.folderColor : Theme.surfaceText)
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
-                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : modelData.value === "trash" ? 40 : 0) - Theme.spacingS
+                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : modelData.value === "trash" ? 40 : (modelData.value === "drive" && modelData.mounted) ? 25 : 0) - Theme.spacingS
                             }
 
                             // Delete button (favorites + bookmarks)
@@ -3902,6 +3879,16 @@ DesktopPluginComponent {
                                 visible: dropdownItemArea.containsMouse && (modelData.value === "favorite" || modelData.value === "bookmark")
                             }
 
+                            // Eject button (mounted drives)
+                            StyledText {
+                                text: "⏏"
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: root.folderColor
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.right: parent.right
+                                visible: dropdownItemArea.containsMouse && modelData.value === "drive" && modelData.mounted
+                            }
+
                         }
 
                         MouseArea {
@@ -3912,6 +3899,13 @@ DesktopPluginComponent {
                             visible: !isSeparator
 
                             onClicked: mouse => {
+                                // Eject button on mounted drives
+                                if (modelData.value === "drive" && modelData.mounted && mouse.x > parent.width - 25) {
+                                    unmountProc.command = ["udisksctl", "unmount", "-b", modelData.device];
+                                    unmountProc.pendingDevice = modelData.device;
+                                    unmountProc.running = true;
+                                    return;
+                                }
                                 // X button on favorites/bookmarks
                                 if ((modelData.value === "favorite" || modelData.value === "bookmark") && mouse.x > parent.width - 25) {
                                     if (modelData.value === "favorite") {
@@ -3921,15 +3915,24 @@ DesktopPluginComponent {
                                     }
                                     return;
                                 }
-                                if (!root.sidebarPinned) folderDropdown.close();
+                                if (modelData.value !== "drives" && !root.sidebarPinned)
+                                    folderDropdown.close();
                                 if (isPinned) {
                                     root.navigateToFolder(modelData.path);
                                 } else if (modelData.value === "favorite") {
                                     root.navigateToFolder(modelData.path);
                                 } else if (modelData.value === "drive") {
-                                    root.navigateToFolder(modelData.path);
-                                } else if (modelData.value === "custom") {
-                                    folderPickerDialog.open();
+                                    if (modelData.path && modelData.path !== "") {
+                                        root.navigateToFolder(modelData.path);
+                                    } else if (modelData.device) {
+                                        mountProc.command = ["udisksctl", "mount", "-b", modelData.device];
+                                        mountProc.pendingDevice = modelData.device;
+                                        mountProc.running = true;
+                                        folderDropdown.close();
+                                    }
+                                } else if (modelData.value === "drives") {
+                                    root._rebuildDriveList();
+                                    driveListPopup.open();
                                 } else {
                                     // Default standard folder type
                                     var stdPath = root.resolveStandardFolderPath(modelData.value);
@@ -3981,7 +3984,7 @@ DesktopPluginComponent {
 
                         // Empty trash button (on top of all MouseAreas)
                         StyledText {
-                            text: "empty"
+                            text: i18n("Empty")
                             font.pixelSize: Theme.fontSizeSmall - 1
                             color: emptyBtn.containsMouse ? "#FF1744" : Theme.error
                             anchors.verticalCenter: parent.verticalCenter
@@ -4044,7 +4047,7 @@ DesktopPluginComponent {
                 spacing: 8
 
                 StyledText {
-                    text: "Empty Trash?"
+                    text: i18n("Empty Trash")
                     font.pixelSize: Theme.fontSizeSmall
                     font.bold: true
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -4058,7 +4061,7 @@ DesktopPluginComponent {
                         width: 60; height: 24; radius: 4
                         color: Theme.error
                         StyledText {
-                            text: "Empty"
+                            text: i18n("Empty")
                             color: "white"
                             font.pixelSize: Theme.fontSizeSmall - 1
                             anchors.centerIn: parent
@@ -4078,7 +4081,7 @@ DesktopPluginComponent {
                         width: 60; height: 24; radius: 4
                         color: Theme.surfaceVariant
                         StyledText {
-                            text: "Cancel"
+                            text: i18n("Cancel")
                             color: Theme.surfaceVariantText
                             font.pixelSize: Theme.fontSizeSmall - 1
                             anchors.centerIn: parent
@@ -4094,6 +4097,137 @@ DesktopPluginComponent {
         }
     }
 }
+
+    // Drive list popup (opened from folderDropdown "Drives" entry)
+    Popup {
+        id: driveListPopup
+        parent: folderDropdownContent
+        width: 320
+        height: Math.min(driveListColumn.implicitHeight + Theme.spacingS * 2, 400)
+        padding: 0
+        x: folderDropdown.width + 4
+        y: 0
+        modal: false
+        dim: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: Theme.withAlpha(Theme.surfaceContainer, root.folderDropdownOpacity)
+            radius: Theme.cornerRadius
+            border.color: Theme.withAlpha(Theme.outline, 0.15)
+            border.width: 1
+        }
+
+        contentItem: Column {
+            id: driveListColumn
+            anchors.fill: parent
+            anchors.margins: Theme.spacingS
+            spacing: 2
+
+            StyledText {
+                text: i18n("Drives")
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                color: Theme.surfaceVariantText
+                height: 24
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            Rectangle {
+                height: 1
+                color: Theme.withAlpha(Theme.outline, 0.12)
+            }
+
+            Repeater {
+                model: root.driveListModel
+
+                delegate: Rectangle {
+                    id: driveDelegateRoot
+                    width: parent.width
+                    height: 28
+                    radius: Theme.cornerRadius - 2
+                    color: driveItemArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.15) : "transparent"
+
+                    readonly property var _d: modelData
+
+                    // Icon — left side
+                    DankIcon {
+                        id: driveDelIcon
+                        x: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: modelData.icon || "hard_drive"
+                        size: 14
+                        color: modelData.mounted ? Theme.primary : Theme.surfaceVariantText
+                    }
+
+                    // Size text — right side
+                    StyledText {
+                        id: driveDelSize
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.size
+                        font.pixelSize: Theme.fontSizeSmall - 2
+                        color: Theme.surfaceVariantText
+                        visible: modelData.size !== ""
+                    }
+
+                    // Label + subtitle — middle, filling remaining space
+                    Column {
+                        anchors.left: driveDelIcon.right
+                        anchors.leftMargin: Theme.spacingS
+                        anchors.right: driveDelSize.left
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+                        clip: true
+
+                        StyledText {
+                            text: modelData.label
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.bold: true
+                            color: modelData.mounted ? Theme.surfaceText : Theme.surfaceVariantText
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
+
+                        StyledText {
+                            text: modelData.mounted ? modelData.path : (modelData.device + " · " + i18n("unmounted"))
+                            font.pixelSize: Theme.fontSizeSmall - 2
+                            color: Theme.surfaceVariantText
+                            opacity: 0.7
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
+                    }
+
+                    MouseArea {
+                        id: driveItemArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (modelData.mounted && modelData.path && modelData.path !== "") {
+                                driveListPopup.close();
+                                if (!root.sidebarPinned) folderDropdown.close();
+                                root._currentDriveInfo = { label: modelData.label, path: modelData.path, icon: modelData.icon || "hard_drive" };
+                                root.navigateToFolder(modelData.path);
+                                root._isOnDrive = true;
+                                buildFolderDropdownModel();
+                            } else if (modelData.device) {
+                                driveListPopup.close();
+                                mountProc.command = ["udisksctl", "mount", "-b", modelData.device];
+                                mountProc.pendingDevice = modelData.device;
+                                mountProc.running = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item { height: 4; width: 1 }
+        }
+    }
 
     // Create Dropdown Popup
     Popup {
@@ -4460,20 +4594,100 @@ DesktopPluginComponent {
         }
     }
 
-    // Native Folder Dialog Selector
-    FolderDialog {
-        id: folderPickerDialog
-        title: i18n("Select Folder")
-        currentFolder: root.targetFolderUrl
-        onAccepted: {
-            let path = root._cleanPath(selectedFolder);
-            if (pluginService) {
-                pluginService.savePluginData(pluginId, "customFolderPath", path);
-                pluginService.savePluginData(pluginId, "folderType", "custom");
-            }
-            root.navigateToFolder(path);
+    // Drive list for picker Mounts popup
+    property var _driveEntries: []
+    property var driveListModel: []
+
+    function _rebuildDriveList() {
+        var list = [];
+        for (var i = 0; i < root._driveEntries.length; i++) {
+            var de = root._driveEntries[i];
+            if (de.label === "Windows") continue;
+            list.push({
+                label: de.label,
+                path: de.path,
+                device: de.device,
+                mounted: de.mounted,
+                icon: de.icon,
+                size: de.size || "",
+                fstype: de.fstype || ""
+            });
+        }
+        root.driveListModel = list;
+    }
+
+    Process {
+        id: lsblkProc
+        command: ["lsblk", "-o", "NAME,FSTYPE,MOUNTPOINT,LABEL,SIZE,TYPE", "-J"]
+        stdout: StdioCollector { id: lsblkOut }
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0 || lsblkOut.text.trim() === "") return;
+            var json, result = [];
+            try { json = JSON.parse(lsblkOut.text); } catch (e) { return; }
+            var devices = json.blockdevices || [];
+            for (var di = 0; di < devices.length; di++)
+                root._scanDevice(devices[di], result);
+            root._driveEntries = result;
+            // Rebuild dropdown model with latest drive data (mounted + unmounted)
+            buildFolderDropdownModel();
+            root._rebuildDriveList();
         }
     }
+
+    Process {
+        id: mountProc
+        property string pendingDevice: ""
+        stdout: StdioCollector {}
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode === 0 && mountProc.pendingDevice)
+                rescanTimer.start();
+            mountProc.pendingDevice = "";
+        }
+    }
+
+    Process {
+        id: unmountProc
+        property string pendingDevice: ""
+        stdout: StdioCollector {}
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode === 0 && unmountProc.pendingDevice)
+                rescanTimer.start();
+            unmountProc.pendingDevice = "";
+        }
+    }
+
+    Timer {
+        id: rescanTimer
+        interval: 400
+        repeat: false
+        onTriggered: { lsblkProc.running = true; }
+    }
+
+    function _scanDevice(dev, result) {
+        if (dev.type === "disk" && dev.children) {
+            for (var ci = 0; ci < dev.children.length; ci++)
+                root._scanDevice(dev.children[ci], result);
+            return;
+        }
+        if (dev.type !== "part" && dev.type !== "crypt") return;
+        if (!dev.fstype || dev.fstype === "") return;
+        if (dev.fstype === "swap") return;
+        if (dev.fstype === "vfat" && dev.mountpoint === "/boot/efi") return;
+        // Skip mounted system partitions not under user-accessible mount points
+        if (dev.mountpoint && dev.mountpoint.indexOf("/media/") !== 0 && dev.mountpoint.indexOf("/run/media/") !== 0 && dev.mountpoint.indexOf("/mnt/") !== 0) return;
+
+        var dispName = dev.label;
+        if (!dispName && dev.mountpoint)
+            dispName = dev.mountpoint.split("/").filter(function(s) { return s !== ""; }).pop() || dev.name;
+        if (!dispName)
+            dispName = dev.name;
+        var mounted = !!dev.mountpoint;
+        var fs = dev.fstype || "";
+        var icon = "hard_drive";
+        result.push({ label: dispName, path: dev.mountpoint || "", device: "/dev/" + dev.name, mounted: mounted, icon: icon, size: dev.size || "" });
+    }
+
+    // _scanDrives removed — lsblk runs on driveScanTimer
 
     // ── File Preview Popup (Space key) ────────────────────────────────────────
     Shortcut {
