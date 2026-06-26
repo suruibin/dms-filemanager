@@ -58,4 +58,6 @@ git clone https://github.com/suruibin/dms-filemanager ~/.config/DankMaterialShel
 
 - GPL-3.0
 
-## 待办 / 路线图
+## 已知Bug
+
+- space 快捷键 如果不能预览文件,请手动重启dms命令: dms restart 
