@@ -2613,6 +2613,24 @@ DesktopPluginComponent {
                         }
                     }
 
+                    // Filter Button
+                    MouseArea {
+                        id: filterBtn
+                        width: 20
+                        height: 20
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: filterDropdown.open()
+
+                        DankIcon {
+                            anchors.centerIn: parent
+                            name: "filter_list"
+                            size: 16
+                            color: (root.filterType !== "all" || root.filterTime !== "all") ? Theme.primary : (filterBtn.containsMouse ? Theme.primary : Theme.surfaceText)
+                            opacity: (root.filterType !== "all" || root.filterTime !== "all" || filterBtn.containsMouse) ? 1.0 : 0.7
+                        }
+                    }
+
                     // Sort By Button
                     MouseArea {
                         id: sortByBtn
@@ -2638,24 +2656,6 @@ DesktopPluginComponent {
                         }
                     }
  
-                    // Filter Button
-                    MouseArea {
-                        id: filterBtn
-                        width: 20
-                        height: 20
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: filterDropdown.open()
-
-                        DankIcon {
-                            anchors.centerIn: parent
-                            name: "filter_list"
-                            size: 16
-                            color: (root.filterType !== "all" || root.filterTime !== "all") ? Theme.primary : (filterBtn.containsMouse ? Theme.primary : Theme.surfaceText)
-                            opacity: (root.filterType !== "all" || root.filterTime !== "all" || filterBtn.containsMouse) ? 1.0 : 0.7
-                        }
-                    }
-
                 }
             }
 
