@@ -2048,8 +2048,8 @@ DesktopPluginComponent {
                     ? (backBtn.visible ? backBtn.right : (sidebarToggleBtn.visible ? sidebarToggleBtn.right : parent.left))
                     : (sidebarToggleBtn.visible ? sidebarToggleBtn.right : parent.left)
                 anchors.leftMargin: root.headerPosition === "top"
-                    ? (backBtn.visible ? 8 : (sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 : 8)))
-                    : (sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 : 8))
+? (backBtn.visible ? 8 : (sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 + 10 : 8)))
+            : (sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 + 10 : 8))
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 0
                 width: 20; height: 20
@@ -2286,7 +2286,7 @@ DesktopPluginComponent {
             MouseArea {
                 id: backBtn
                 anchors.left: sidebarToggleBtn.visible ? sidebarToggleBtn.right : parent.left
-                anchors.leftMargin: sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 : 8)
+                anchors.leftMargin: sidebarToggleBtn.visible ? 8 : (root.sidebarPinned ? folderDropdown.width - 15 - Theme.spacingM + 8 + 10 : 8)
                 anchors.top: parent.top
                 width: 20
                 height: 24
@@ -3776,15 +3776,15 @@ DesktopPluginComponent {
     Popup {
         id: folderDropdown
         parent: root
-        width: Math.min(root.width * 0.17, 250)
+        width: Math.min(root.width * 0.15, 240)
         height: root.height - 28
         padding: 0
         modal: !sidebarPinned
         dim: false
         closePolicy: sidebarPinned ? Popup.NoAutoClose : Popup.CloseOnPressOutside
-        x: 0
+        x: 15
         visible: sidebarPinned || opened
-        y: 14
+        y: 15
 
         background: Rectangle {
             color: "transparent"
