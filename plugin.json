@@ -2,7 +2,7 @@
   "id": "dmsfilemanager",
   "name": "DMS File Manager",
   "description": "File Manager For DMS",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "Suruibin",
   "type": "desktop",
   "capabilities": ["desktop-widget"],

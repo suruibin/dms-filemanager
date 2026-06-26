@@ -1614,24 +1614,6 @@ DesktopPluginComponent {
             }
         }
 
-        // Add pinnedPaths (dmsFileManager's own pin-to-top items)
-        var pins = root.pinnedPaths || [];
-        var hasPins = false;
-        for (var pi = 0; pi < pins.length; pi++) {
-            if (String(pins[pi]).indexOf("stack://") !== 0) { hasPins = true; break; }
-        }
-
-        if (hasPins) {
-            items.push({ value: "separator", icon: "", label: "" });
-            for (var i = 0; i < pins.length; i++) {
-                var pinPath = String(pins[i]);
-                if (pinPath.indexOf("stack://") === 0) continue;
-                var parts = pinPath.split("/");
-                var name = parts[parts.length - 1] || pinPath;
-                items.push({ label: name, value: "pinned", icon: "push_pin", path: pinPath });
-            }
-        }
-
         // Favorites section
         var favs = root.favoritePaths || [];
         if (favs.length > 0) {
@@ -3903,11 +3885,11 @@ DesktopPluginComponent {
                             StyledText {
                                 text: modelData.label
                                 font.pixelSize: Theme.fontSizeSmall
-                                font.bold: isPinned || root.folderType === modelData.value
-                                color: isPinned ? Theme.primary : (root.folderType === modelData.value ? Theme.primary : Theme.surfaceText)
+                                font.bold: isPinned || (root.folderType === modelData.value && !isCustom)
+                                color: isPinned ? Theme.primary : (root.folderType === modelData.value && !isCustom ? "#4CAF50" : Theme.surfaceText)
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
-                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : 0) - Theme.spacingS
+                                width: parent.width - (modelData.value === "favorite" || modelData.value === "bookmark" ? 25 : modelData.value === "trash" ? 40 : 0) - Theme.spacingS
                             }
 
                             // Delete button (favorites + bookmarks)
@@ -3919,6 +3901,7 @@ DesktopPluginComponent {
                                 anchors.right: parent.right
                                 visible: dropdownItemArea.containsMouse && (modelData.value === "favorite" || modelData.value === "bookmark")
                             }
+
                         }
 
                         MouseArea {
@@ -3952,7 +3935,8 @@ DesktopPluginComponent {
                                     var stdPath = root.resolveStandardFolderPath(modelData.value);
                                     if (stdPath !== "") {
                                         root.navigateToFolder(stdPath);
-                                        // Override folderType so display name shows correctly (navigateToFolder sets it to "custom")
+                                        // Restore correct folderType (navigateToFolder overrides to "custom")
+                                        root.folderType = modelData.value;
                                         if (pluginService) {
                                             pluginService.savePluginData(pluginId, "folderType", modelData.value);
                                         }
@@ -3994,9 +3978,30 @@ DesktopPluginComponent {
                                 dropIndicator.y = 0;
                             }
                         }
+
+                        // Empty trash button (on top of all MouseAreas)
+                        StyledText {
+                            text: "empty"
+                            font.pixelSize: Theme.fontSizeSmall - 1
+                            color: emptyBtn.containsMouse ? "#FF1744" : Theme.error
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 6
+                            visible: !isSeparator && root.folderType === "trash" && modelData.value === "trash"
+
+                            MouseArea {
+                                id: emptyBtn
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    emptyTrashConfirm.open();
+                                }
+                            }
+                        }
                     }
                 }
-    }
+            }
         }
 
         // Drop indicator overlay for drag-to-reorder
@@ -4012,6 +4017,80 @@ DesktopPluginComponent {
             color: Theme.primary
             radius: 1
             z: 10
+        }
+
+        // Empty trash confirmation dialog
+        Popup {
+            id: emptyTrashConfirm
+            parent: folderDropdownContent
+            width: 180
+            height: 80
+            x: (parent.width - width) / 2
+            y: (parent.height - height) / 2
+            padding: 0
+            modal: true
+            dim: true
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+            background: Rectangle {
+                color: Theme.surfaceContainer
+                radius: Theme.cornerRadius
+                border.color: Theme.withAlpha(Theme.outline, 0.15)
+                border.width: 1
+            }
+
+            contentItem: Column {
+                anchors.centerIn: parent
+                spacing: 8
+
+                StyledText {
+                    text: "Empty Trash?"
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 12
+
+                    Rectangle {
+                        width: 60; height: 24; radius: 4
+                        color: Theme.error
+                        StyledText {
+                            text: "Empty"
+                            color: "white"
+                            font.pixelSize: Theme.fontSizeSmall - 1
+                            anchors.centerIn: parent
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                Quickshell.execDetached(["gio", "trash", "--empty"]);
+                                folderModel.folder = Qt.resolvedUrl(root.targetFolderUrl);
+                                emptyTrashConfirm.close();
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 60; height: 24; radius: 4
+                        color: Theme.surfaceVariant
+                        StyledText {
+                            text: "Cancel"
+                            color: Theme.surfaceVariantText
+                            font.pixelSize: Theme.fontSizeSmall - 1
+                            anchors.centerIn: parent
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: emptyTrashConfirm.close()
+                        }
+                    }
+                }
+            }
         }
     }
 }
