@@ -61,3 +61,7 @@ git clone https://github.com/suruibin/dms-filemanager ~/.config/DankMaterialShel
 ## 已知Bug
 
 - space 快捷键 如果不能预览文件,请手动重启dms命令: dms restart 
+
+## 参考项目
+
+- [folderView](https://github.com/hthienloc/dms-folder-view)
