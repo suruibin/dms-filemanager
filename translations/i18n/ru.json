@@ -150,5 +150,14 @@
   "Files with the same name already exist in this folder.": "Файлы с таким именем уже существуют в этой папке.",
   "Add to Bookmarks": "Добавить в закладки",
   "Bookmarked": "Добавлено в закладки",
-  "Desktop Widgets": "Виджеты рабочего стола"
+  "Desktop Widgets": "Виджеты рабочего стола",
+  "Restore": "Восстановить",
+  "Delete Permanently": "Удалить навсегда",
+  "Cannot restore — file already exists at original location": "Невозможно восстановить — файл уже существует в исходном расположении",
+  "Cannot restore — trash info not found": "Невозможно восстановить — информация о корзине не найдена",
+  "Permanently deleted": "Удалено навсегда",
+  "Delete failed": "Ошибка удаления",
+  "Created %1": "Создан %1",
+  "Create failed": "Ошибка создания",
+  "Information": "Информация"
 }

@@ -150,5 +150,14 @@
   "Files with the same name already exist in this folder.": "同じ名前のファイルがこのフォルダーに既に存在します。",
   "Add to Bookmarks": "ブックマークに追加",
   "Bookmarked": "ブックマーク済み",
-  "Desktop Widgets": "デスクトップウィジェット"
+  "Desktop Widgets": "デスクトップウィジェット",
+  "Restore": "復元",
+  "Delete Permanently": "完全に削除",
+  "Cannot restore — file already exists at original location": "復元できません — 元の場所にファイルが既に存在します",
+  "Cannot restore — trash info not found": "復元できません — ゴミ箱情報が見つかりません",
+  "Permanently deleted": "完全に削除しました",
+  "Delete failed": "削除に失敗しました",
+  "Created %1": "作成しました: %1",
+  "Create failed": "作成に失敗しました",
+  "Information": "情報"
 }

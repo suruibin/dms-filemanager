@@ -234,16 +234,29 @@ Popup {
         }
         
         const targetPath = pathStr + "/" + name;
-        
-        try {
-            if (createDialog.isFolder) {
-                Quickshell.execDetached(["mkdir", "-p", targetPath]);
-            } else {
-                Quickshell.execDetached(["touch", targetPath]);
-            }
-        } catch (e) {
-            ToastService.showToast("Create error: " + e.message, ToastService.levelError);
-        }
+        const isFolder = createDialog.isFolder;
+        const safePath = targetPath.replace(/'/g, "'\\''");
         createDialog.close();
+
+        Proc.runCommand("createDedup-" + Math.random(), ["sh", "-c",
+            "path='" + safePath + "';\n" +
+            "isfolder=" + (isFolder ? "1" : "0") + ";\n" +
+            'if [ -e "$path" ]; then\n' +
+            '  base="${path%.*}"; ext="${path##*.}";\n' +
+            '  if [ "$ext" = "$path" ]; then\n' +
+            '    c=1; while [ -e "${path} ("$c")" ]; do c=$((c+1)); done;\n' +
+            '    path="${path} ("$c")";\n' +
+            '  else\n' +
+            '    c=1; while [ -e "${base} ("$c").${ext}" ]; do c=$((c+1)); done;\n' +
+            '    path="${base} ("$c").${ext}";\n' +
+            '  fi;\n' +
+            'fi;\n' +
+            'if [ "$isfolder" = "1" ]; then mkdir -p "$path"; else touch "$path"; fi;\n' +
+            'printf "%s" "$(basename "$path")"'
+        ], function(out, code) {
+            if (code !== 0) {
+                ToastService.showToast(i18n("Create failed"), ToastService.levelError);
+            }
+        });
     }
 }

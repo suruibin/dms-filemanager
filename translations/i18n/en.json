@@ -144,5 +144,15 @@
   "Files with the same name already exist in this folder.": "Files with the same name already exist in this folder.",
   "Add to Bookmarks": "Add to Bookmarks",
   "Bookmarked": "Bookmarked",
-  "Desktop Widgets": "Desktop Widgets"
+  "Desktop Widgets": "Desktop Widgets",
+  "Restore": "Restore",
+  "Delete Permanently": "Delete Permanently",
+  "Restored to %1": "Restored to %1",
+  "Cannot restore — file already exists at original location": "Cannot restore — file already exists at original location",
+  "Cannot restore — trash info not found": "Cannot restore — trash info not found",
+  "Permanently deleted": "Permanently deleted",
+  "Delete failed": "Delete failed",
+  "Created %1": "Created %1",
+  "Create failed": "Create failed",
+  "Information": "Information"
 }

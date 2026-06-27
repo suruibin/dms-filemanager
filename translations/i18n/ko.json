@@ -150,5 +150,14 @@
   "Files with the same name already exist in this folder.": "같은 이름의 파일이 이미 이 폴더에 있습니다.",
   "Add to Bookmarks": "북마크에 추가",
   "Bookmarked": "북마크됨",
-  "Desktop Widgets": "데스크톱 위젯"
+  "Desktop Widgets": "데스크톱 위젯",
+  "Restore": "복원",
+  "Delete Permanently": "영구 삭제",
+  "Cannot restore — file already exists at original location": "복원할 수 없음 — 원래 위치에 이미 파일이 존재합니다",
+  "Cannot restore — trash info not found": "복원할 수 없음 — 휴지통 정보를 찾을 수 없습니다",
+  "Permanently deleted": "영구 삭제됨",
+  "Delete failed": "삭제 실패",
+  "Created %1": "%1 생성됨",
+  "Create failed": "생성 실패",
+  "Information": "정보"
 }

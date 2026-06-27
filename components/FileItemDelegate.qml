@@ -120,12 +120,12 @@ Item {
                     sizeScale: delegate.dmsFileManager ? delegate.dmsFileManager.sizeScale : 1
                     hover: ma.containsMouse
                 }
-                // Empty indicator dot for grid view
+                // Empty indicator dot for grid view (0-byte files + empty folders)
                 Rectangle {
                     anchors.centerIn: parent
                     width: 8; height: 8; radius: 4
                     color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyColor : "red"
-                    visible: delegate.isEmpty && delegate.fileIsDir
+                    visible: delegate.isEmpty
                 }
                 // Favorite star on icon center - click to remove, show X on hover
                 Item {
@@ -187,7 +187,7 @@ Item {
             Text {
                 visible: !delegate.editing
                 font.pixelSize: delegate.labelPixelSize
-                width: parent.width - delegate.thumbnailSize - 6 - (delegate._pinned ? delegate.pinIconSize + 4 : 0) - (delegate._isFavorite ? 14 : 0) - (delegate.isEmpty && delegate.fileIsDir ? 10 : 0)
+                width: parent.width - delegate.thumbnailSize - 6 - (delegate._pinned ? delegate.pinIconSize + 4 : 0) - (delegate._isFavorite ? 14 : 0) - (delegate.isEmpty ? 10 : 0)
                 text: delegate.displayBaseName
                 color: _surfaceText
                 anchors.verticalCenter: parent.verticalCenter
@@ -197,7 +197,7 @@ Item {
 
             // Indicators after name: empty dot + favorite star
             Text {
-                text: delegate.isEmpty && delegate.fileIsDir ? "●" : ""
+                text: delegate.isEmpty ? "●" : ""
                 color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyColor : "red"
                 font.pixelSize: delegate.labelPixelSize - 2
                 anchors.verticalCenter: parent.verticalCenter
@@ -310,8 +310,13 @@ Item {
                         fv.handleItemLabelClick(ma, ma, mouse.x, mouse.y, delegate.filePath);
                 } else if (mouse.button === Qt.MiddleButton) {
                     fv.stopRenameArmTimer();
-                    var gp = mapToItem(fv, mouse.x, mouse.y);
-                    fv.showQuickMenu(delegate.filePath, delegate.fileName, delegate.fileIsDir, gp.x, gp.y);
+                    if (fv.folderType === "trash") {
+                        var gp = mapToItem(fv, mouse.x, mouse.y);
+                        fv.showTrashActionPopup(delegate.filePath, delegate.fileName, gp.x, gp.y);
+                    } else {
+                        var gp = mapToItem(fv, mouse.x, mouse.y);
+                        fv.showQuickMenu(delegate.filePath, delegate.fileName, delegate.fileIsDir, gp.x, gp.y);
+                    }
                 }
             }
 

@@ -150,5 +150,14 @@
   "Files with the same name already exist in this folder.": "Ya existen archivos con el mismo nombre en esta carpeta.",
   "Add to Bookmarks": "Añadir a marcadores",
   "Bookmarked": "Marcado",
-  "Desktop Widgets": "Widgets de escritorio"
+  "Desktop Widgets": "Widgets de escritorio",
+  "Restore": "Restaurar",
+  "Delete Permanently": "Eliminar permanentemente",
+  "Cannot restore — file already exists at original location": "No se puede restaurar — ya existe un archivo en la ubicación original",
+  "Cannot restore — trash info not found": "No se puede restaurar — no se encontró información de la papelera",
+  "Permanently deleted": "Eliminado permanentemente",
+  "Delete failed": "Error al eliminar",
+  "Created %1": "Creado %1",
+  "Create failed": "Error al crear",
+  "Information": "Información"
 }

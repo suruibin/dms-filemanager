@@ -70,6 +70,7 @@
   "Image Copied": "图像已复制",
   "Images Only": "仅图片",
   "Info": "信息",
+  "Information": "详细信息",
   "is empty": "是空的",
   "Language": "语言",
   "Last 24 Hours": "过去24小时",
@@ -150,5 +151,14 @@
   "Files with the same name already exist in this folder.": "同名文件已存在于当前文件夹。",
   "Add to Bookmarks": "添加到书签",
   "Bookmarked": "已添加书签",
-  "Desktop Widgets": "桌面组件"
+  "Desktop Widgets": "桌面组件",
+  "Restore": "恢复",
+  "Delete Permanently": "永久删除",
+  "Restored to %1": "已恢复到 %1",
+  "Cannot restore — file already exists at original location": "无法恢复 — 原始位置已存在同名文件",
+  "Cannot restore — trash info not found": "无法恢复 — 未找到回收站信息",
+  "Permanently deleted": "已永久删除",
+  "Delete failed": "删除失败",
+  "Created %1": "已创建 %1",
+  "Create failed": "创建失败"
 }

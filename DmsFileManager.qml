@@ -347,10 +347,14 @@ DesktopPluginComponent {
         sequence: "Del"
         onActivated: {
             if (root.selectedFilePaths.length > 0) {
-                var paths = root.selectedFilePaths.slice();
-                root.clearSelection();
-                for (var i = 0; i < paths.length; i++) {
-                    Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
+                if (root.folderType === "trash") {
+                    root.deleteFromTrashPermanently(root.selectedFilePaths[0]);
+                } else {
+                    var paths = root.selectedFilePaths.slice();
+                    root.clearSelection();
+                    for (var i = 0; i < paths.length; i++) {
+                        Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
+                    }
                 }
             }
         }
@@ -640,6 +644,86 @@ DesktopPluginComponent {
         quickMenu.x = Math.max(0, Math.min(root.width - quickMenu.width, x));
         quickMenu.y = Math.max(0, Math.min(root.height - quickMenu.height, y));
         quickMenu.open();
+    }
+
+    // Wrapper for showing the trash action popup from a delegate
+    function showTrashActionPopup(filePath, fileName, x, y) {
+        if (root.selectedFilePaths.indexOf(filePath) === -1)
+            root.selectSingle(filePath);
+        trashActionPopup.currentPath = filePath;
+        trashActionPopup.currentName = fileName;
+        trashActionPopup.parent = root;
+        trashActionPopup.x = Math.max(0, Math.min(root.width - trashActionPopup.width, x));
+        trashActionPopup.y = Math.max(0, Math.min(root.height - trashActionPopup.height, y));
+        trashActionPopup.open();
+    }
+
+    // Restore a file from trash back to its original location
+    function restoreFromTrash(filePath) {
+        var paths = root.selectedFilePaths.length > 0
+            ? root.selectedFilePaths.slice()
+            : [filePath];
+        if (paths.indexOf(filePath) === -1)
+            paths.push(filePath);
+        for (var ri = 0; ri < paths.length; ri++) {
+            var p = paths[ri];
+            if (!p || p.startsWith("stack://")) continue;
+            var clean = root._cleanPath(p);
+            var safePath = clean.replace(/'/g, "'\\''");
+            Proc.runCommand("restoreTrash-" + Math.random(), ["sh", "-c",
+                "info=\"$HOME/.local/share/Trash/info/$(basename '" + safePath + "').trashinfo\";\n" +
+                'orig=$(sed -n \'s/^Path=//p\' "$info" 2>/dev/null);\n' +
+                'if [ -z "$orig" ]; then echo "NOINFO"; exit 2; fi;\n' +
+                'if [ -e "$orig" ]; then echo "CONFLICT:$orig"; exit 1; fi;\n' +
+                "mkdir -p \"$(dirname \"$orig\")\" && mv '" + safePath + "' \"$orig\" && rm -f \"$info\" &&\n" +
+                'echo "OK:$orig"'
+            ], function(out, code) {
+                if (code === 0 && out) {
+                    var line = String(out).trim();
+                    if (line.startsWith("OK:")) {
+                        root.refreshCurrentFolder();
+                    }
+                } else if (code === 1) {
+                    ToastService.showToast(i18n("Cannot restore — file already exists at original location"), ToastService.levelError);
+                } else {
+                    ToastService.showToast(i18n("Cannot restore — trash info not found"), ToastService.levelError);
+                }
+            });
+        }
+    }
+
+    // Permanently delete files from trash
+    function deleteFromTrashPermanently(filePath) {
+        var paths = root.selectedFilePaths.length > 0
+            ? root.selectedFilePaths.slice()
+            : [filePath];
+        if (paths.indexOf(filePath) === -1)
+            paths.push(filePath);
+        for (var ri = 0; ri < paths.length; ri++) {
+            var p = paths[ri];
+            if (!p || p.startsWith("stack://")) continue;
+            var clean = root._cleanPath(p);
+            var safePath = clean.replace(/'/g, "'\\''");
+            Proc.runCommand("permDelete-" + Math.random(), ["sh", "-c",
+                "rm -rf '" + safePath + "' && " +
+                "rm -f \"$HOME/.local/share/Trash/info/$(basename '" + safePath + "').trashinfo\"" + " && echo OK"
+            ], function(out, code) {
+                if (code === 0) {
+                    ToastService.showToast(i18n("Permanently deleted"), ToastService.levelInfo);
+                    root.refreshCurrentFolder();
+                } else {
+                    ToastService.showToast(i18n("Delete failed"), ToastService.levelError);
+                }
+            });
+        }
+    }
+
+    // Refresh the current folder view
+    function refreshCurrentFolder() {
+        var url = root.targetFolderUrl;
+        if (url) {
+            folderModel.folder = Qt.resolvedUrl(url);
+        }
     }
 
     function dragMimeData(filePath) {
@@ -3498,21 +3582,11 @@ DesktopPluginComponent {
                             }
                         },
                         {
-                            text: i18n("Rename"),
-                            icon: "edit",
-                            visible: root.selectedFilePaths.length <= 1,
+                            actionName: "favorite",
+                            visible: true,
                             action: function() {
                                 quickMenu.close();
-                                renameDialog.showFor(quickMenu.currentPath, quickMenu.currentName, quickMenu.currentIsDir);
-                            }
-                        },
-                        {
-                            text: i18n("Info"),
-                            icon: "info",
-                            visible: root.selectedFilePaths.length <= 1 && !quickMenu.currentPath.startsWith("stack://"),
-                            action: function() {
-                                quickMenu.close();
-                                infoDialog.showFor(quickMenu.currentPath, quickMenu.currentName, quickMenu.currentIsDir);
+                                root.toggleFavorite(quickMenu.currentPath);
                             }
                         },
                         {
@@ -3525,19 +3599,29 @@ DesktopPluginComponent {
                             }
                         },
                         {
-                            actionName: "favorite",
-                            visible: true,
-                            action: function() {
-                                quickMenu.close();
-                                root.toggleFavorite(quickMenu.currentPath);
-                            }
-                        },
-                        {
                             actionName: "pin",
                             visible: true,
                             action: function() {
                                 quickMenu.close();
                                 root.togglePin(quickMenu.currentPath);
+                            }
+                        },
+                        {
+                            text: i18n("Rename"),
+                            icon: "edit",
+                            visible: root.selectedFilePaths.length <= 1,
+                            action: function() {
+                                quickMenu.close();
+                                renameDialog.showFor(quickMenu.currentPath, quickMenu.currentName, quickMenu.currentIsDir);
+                            }
+                        },
+                        {
+                            text: i18n("Information"),
+                            icon: "info",
+                            visible: root.selectedFilePaths.length <= 1 && !quickMenu.currentPath.startsWith("stack://"),
+                            action: function() {
+                                quickMenu.close();
+                                infoDialog.showFor(quickMenu.currentPath, quickMenu.currentName, quickMenu.currentIsDir);
                             }
                         },
                         {
@@ -3634,6 +3718,103 @@ DesktopPluginComponent {
                             id: menuArea
                             anchors.fill: parent
                             enabled: !isSeparator
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: modelData.action()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Trash Action Popup — middle-click in trash: Restore / Delete Permanently
+    Popup {
+        id: trashActionPopup
+        width: 190
+        height: menuColumnTrash.implicitHeight + Theme.spacingS * 2
+        padding: 0
+        modal: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        property string currentPath: ""
+        property string currentName: ""
+
+        background: Rectangle {
+            color: "transparent"
+        }
+
+        contentItem: Rectangle {
+            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            radius: Theme.cornerRadius
+            border.color: Theme.withAlpha(Theme.outline, 0.15)
+            border.width: 1
+
+            Column {
+                id: menuColumnTrash
+                anchors.fill: parent
+                anchors.margins: Theme.spacingS
+                spacing: 2
+
+                Repeater {
+                    model: [
+                        {
+                            text: i18n("Restore"),
+                            icon: "restore_from_trash",
+                            dangerous: false,
+                            action: function() {
+                                trashActionPopup.close();
+                                root.restoreFromTrash(trashActionPopup.currentPath);
+                            }
+                        },
+                        {
+                            text: i18n("Delete Permanently"),
+                            icon: "delete_forever",
+                            dangerous: true,
+                            action: function() {
+                                trashActionPopup.close();
+                                root.deleteFromTrashPermanently(trashActionPopup.currentPath);
+                            }
+                        }
+                    ]
+
+                    delegate: Rectangle {
+                        width: parent.width
+                        property bool itemVisible: true
+                        visible: itemVisible
+                        height: 32
+                        radius: Theme.cornerRadius - 2
+                        color: trashMenuArea.containsMouse
+                            ? (modelData.dangerous ? Theme.withAlpha(Theme.error, 0.15) : Theme.withAlpha(Theme.primary, 0.15))
+                            : "transparent"
+
+                        Row {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.spacingS
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.spacingS
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spacingS
+
+                            DankIcon {
+                                name: modelData.icon || ""
+                                size: 16
+                                color: modelData.dangerous && trashMenuArea.containsMouse ? Theme.error : Theme.surfaceText
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            StyledText {
+                                text: modelData.text || ""
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: modelData.dangerous && trashMenuArea.containsMouse ? Theme.error : Theme.surfaceText
+                                anchors.verticalCenter: parent.verticalCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        MouseArea {
+                            id: trashMenuArea
+                            anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: modelData.action()

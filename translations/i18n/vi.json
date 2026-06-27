@@ -150,5 +150,14 @@
   "Files with the same name already exist in this folder.": "Tệp trùng tên đã tồn tại trong thư mục này.",
   "Add to Bookmarks": "Thêm vào Dấu trang",
   "Bookmarked": "Đã đánh dấu",
-  "Desktop Widgets": "Tiện ích màn hình"
+  "Desktop Widgets": "Tiện ích màn hình",
+  "Restore": "Khôi phục",
+  "Delete Permanently": "Xóa vĩnh viễn",
+  "Cannot restore — file already exists at original location": "Không thể khôi phục — tệp đã tồn tại tại vị trí gốc",
+  "Cannot restore — trash info not found": "Không thể khôi phục — không tìm thấy thông tin thùng rác",
+  "Permanently deleted": "Đã xóa vĩnh viễn",
+  "Delete failed": "Xóa thất bại",
+  "Created %1": "Đã tạo %1",
+  "Create failed": "Tạo thất bại",
+  "Information": "Thông tin"
 }
