@@ -365,15 +365,31 @@ DesktopPluginComponent {
     }
     Keys.priority: Keys.BeforeItem
     Keys.onPressed: event => {
-        if (event.key === Qt.Key_Space && root.selectedFilePaths.length === 1) {
-            event.accepted = true;
+        // Empty — Space is now handled by a Shortcut so it no longer depends
+        // on `keyHandler` having activeFocus. Previously focus drift after popup
+        // closes caused Space to silently stop working until a DMS restart.
+    }
+    // Space preview — Shortcut (focus-independent). Avoid "Space" string form
+    // because it conflicts with TextInput/search typing; using Qt.Key_Space via
+    // Keys.onPressed was the cause of the focus bug. Keep as Shortcut with the
+    // activeFocus guard so search/rename/preview-content typing still get space.
+    Shortcut {
+        sequences: ["Space"]
+        enabled: root.selectedFilePaths.length === 1
+                 && !headerSearchField.activeFocus
+                 && !previewPopup.opened
+                 && !renameDialog.opened
+                 && !createDialog.opened
+                 && !createAppDialog.opened
+                 && !createStackDialog.opened
+                 && !overwriteDialog.opened
+                 && !infoDialog.opened
+                 && !quickMenu.opened
+                 && !settingsDropdown.opened
+        onActivated: {
             if (root._previewBusy) {
-                // Stuck from previous failed open → clear and retry
+                // Stuck from a previous failed open → clear and retry
                 root._previewBusy = false;
-            }
-            if (previewPopup.opened) {
-                previewPopup.close();
-                return;
             }
             root._previewBusy = true;
             var path = root.selectedFilePaths[0];
