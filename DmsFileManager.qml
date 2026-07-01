@@ -624,9 +624,20 @@ DesktopPluginComponent {
         let clean = root._cleanPath(filePath);
         if (clean.endsWith(".AppImage") || clean.endsWith(".appimage")) {
             Quickshell.execDetached([clean]);
-        } else {
-            Quickshell.execDetached(["gio", "open", clean]);
+            return;
         }
+        // Check if file has execute permission; if so run directly,
+        // otherwise use gio open (for documents like .pdf, .txt etc.)
+        let safePath = clean.replace(/'/g, "'\\''");
+        Proc.runCommand("execCheck-" + Math.random(), ["sh", "-c",
+            "test -x '" + safePath + "' && echo EXEC || echo NOTEXEC"
+        ], function(out) {
+            if (String(out).trim() === "EXEC") {
+                Quickshell.execDetached([clean]);
+            } else {
+                Quickshell.execDetached(["gio", "open", clean]);
+            }
+        });
     }
 
     // Wrapper for rename timer — avoids direct property access from delegates
