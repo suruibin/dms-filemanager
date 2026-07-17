@@ -154,5 +154,8 @@
   "Delete failed": "Delete failed",
   "Created %1": "Created %1",
   "Create failed": "Create failed",
-  "Information": "Information"
+  "Information": "Information",
+  "Extract AppImage Icons": "Extract AppImage Icons",
+  "Extract icons from AppImage files for display": "Auto-extract icons from AppImage files when entering a directory",
+  "参考": "Reference"
 }

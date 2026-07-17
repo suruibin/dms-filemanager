@@ -154,6 +154,16 @@ PluginSettings {
 
         Separator {}
 
+        ToggleSettingPlus {
+            id: extractAppIcons
+            settingKey: "extractAppIcons"
+            label: i18n("Extract AppImage Icons")
+            description: i18n("Extract icons from AppImage files for display")
+            defaultValue: false
+        }
+
+        Separator {}
+
         Item {
             id: emptyColor
             width: parent.width
@@ -369,7 +379,8 @@ PluginSettings {
     PluginAbout {
         repoUrl: "https://github.com/suruibin/dms-conky"
         extraLinks: [
-            { label: "Source", url: "https://github.com/hthienloc/dms-folder-view", icon: "link" }
+            { label: i18n("参考"), url:"https://github.com/hthienloc/dms-folder-view", icon: "link" },
+            { label: "Source", url: "https://github.com/suruibin/dms-filemanager", icon: "link" }
         ]
         contributorsText: i18n("Contributors")
         loadingContributorsText: i18n("Loading contributors...")

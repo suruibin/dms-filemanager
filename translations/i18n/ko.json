@@ -159,5 +159,8 @@
   "Delete failed": "삭제 실패",
   "Created %1": "%1 생성됨",
   "Create failed": "생성 실패",
-  "Information": "정보"
+  "Information": "정보",
+  "Extract AppImage Icons": "AppImage 아이콘 추출",
+  "Extract icons from AppImage files for display": "디렉토리 진입 시 AppImage 아이콘 자동 추출",
+  "参考": "참조"
 }

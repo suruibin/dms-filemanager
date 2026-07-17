@@ -159,5 +159,8 @@
   "Delete failed": "削除に失敗しました",
   "Created %1": "作成しました: %1",
   "Create failed": "作成に失敗しました",
-  "Information": "情報"
+  "Information": "情報",
+  "Extract AppImage Icons": "AppImageアイコンを抽出",
+  "Extract icons from AppImage files for display": "ディレクトリ移動時にAppImageアイコンを自動抽出",
+  "参考": "参考"
 }

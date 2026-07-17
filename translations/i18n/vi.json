@@ -159,5 +159,8 @@
   "Delete failed": "Xóa thất bại",
   "Created %1": "Đã tạo %1",
   "Create failed": "Tạo thất bại",
-  "Information": "Thông tin"
+  "Information": "Thông tin",
+  "Extract AppImage Icons": "Trích xuất biểu tượng AppImage",
+  "Extract icons from AppImage files for display": "Tự động trích xuất biểu tượng AppImage khi vào thư mục",
+  "参考": "Tham khảo"
 }

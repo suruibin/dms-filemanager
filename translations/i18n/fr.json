@@ -159,5 +159,8 @@
   "Delete failed": "Échec de la suppression",
   "Created %1": "Créé %1",
   "Create failed": "Échec de la création",
-  "Information": "Informations"
+  "Information": "Informations",
+  "Extract AppImage Icons": "Extraire les icônes AppImage",
+  "Extract icons from AppImage files for display": "Extraire automatiquement les icônes AppImage à l'entrée d'un dossier",
+  "参考": "Référence"
 }

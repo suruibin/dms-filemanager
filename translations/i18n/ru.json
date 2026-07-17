@@ -159,5 +159,8 @@
   "Delete failed": "Ошибка удаления",
   "Created %1": "Создан %1",
   "Create failed": "Ошибка создания",
-  "Information": "Информация"
+  "Information": "Информация",
+  "Extract AppImage Icons": "Извлекать иконки AppImage",
+  "Extract icons from AppImage files for display": "Автоизвлечение иконок из AppImage при входе в папку",
+  "参考": "Ссылка"
 }

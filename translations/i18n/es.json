@@ -159,5 +159,8 @@
   "Delete failed": "Error al eliminar",
   "Created %1": "Creado %1",
   "Create failed": "Error al crear",
-  "Information": "Información"
+  "Information": "Información",
+  "Extract AppImage Icons": "Extraer iconos de AppImage",
+  "Extract icons from AppImage files for display": "Extraer automáticamente iconos al entrar en un directorio",
+  "参考": "Referencia"
 }

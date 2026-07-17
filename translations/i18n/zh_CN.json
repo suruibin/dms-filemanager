@@ -160,5 +160,8 @@
   "Permanently deleted": "已永久删除",
   "Delete failed": "删除失败",
   "Created %1": "已创建 %1",
-  "Create failed": "创建失败"
+  "Create failed": "创建失败",
+  "Extract AppImage Icons": "解压AppImage图标",
+  "Extract icons from AppImage files for display": "进入目录时自动解压AppImage程序图标",
+  "参考": "参考"
 }

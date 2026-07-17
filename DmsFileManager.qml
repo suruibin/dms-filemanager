@@ -245,6 +245,10 @@ DesktopPluginComponent {
     property string lastSelectedFilePath: ""
     property string searchPattern: ""
     property string selectedFileInfo: ""
+    property bool extractAppIcons: pluginData.extractAppIcons === true
+    onExtractAppIconsChanged: { if (extractAppIcons) refreshCurrentFolder(); }
+    readonly property string _appIconCacheDir: String(Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation)).replace(/^file:\/\//, "") + "/.config/DankMaterialShell/appicons"
+    property var _cachedAppIcons: ({})
     property string emptyColor: pluginData.emptyColor ?? "#00BFA5"
     property string folderColor: pluginData.folderColor ?? "#00BCD4"
     readonly property var favoritePaths: pluginData.favoritePaths ?? []
@@ -1563,8 +1567,9 @@ DesktopPluginComponent {
         // 6. Unpinned Files
         unpinnedFiles.forEach(function(item) { filteredModel.append(item); });
 
-        // ── AppImage icon matching via AppIcon/ folder ────────────────────
-        let _iconDir = root._cleanPath(String(root.targetFolderUrl)) + "/AppIcon";
+        // ── AppImage icon matching via ~/.config/DankMaterialShell/appicons/ ──
+        if (root.extractAppIcons) {
+        let _iconDir = root._appIconCacheDir;
         let _safeIconDir = _iconDir.replace(/'/g, "'\\''");
         Proc.runCommand("scanAppIcon-" + Math.random(), ["sh", "-c", "ls -1 '" + _safeIconDir + "' 2>/dev/null | head -100"], (out, code) => {
             if (code !== 0 || !out || String(out).trim() === "") return;
@@ -1580,6 +1585,8 @@ DesktopPluginComponent {
                 let _dot = _f.lastIndexOf('.');
                 if (_dot > 0) _iMap[_f.substring(0, _dot).toLowerCase()] = "file://" + _iconDir + "/" + _f;
             }
+            // merge into global cache (don't replace — extraction callbacks may have added entries)
+            for (let _sk in _iMap) _cachedAppIcons[_sk] = _iMap[_sk];
             // Match each non-dir AppImage in the model
             for (let _k = 0; _k < filteredModel.count; _k++) {
                 let _name = filteredModel.get(_k).fileName;
@@ -1594,6 +1601,9 @@ DesktopPluginComponent {
                 }
             }
         });
+        // ── AppImage extraction for uncached ───────────────────────────────
+        root._extractMissingIcons();
+        }
 
         // Release the inline-rename lock if the edited item is no longer present
         // after this refresh (e.g. it was trashed/moved while being renamed),
@@ -5688,5 +5698,99 @@ DesktopPluginComponent {
             highlightMoveDuration: 0
             highlightResizeDuration: 0
         }
+    }
+
+    // ── AppImage extraction ────────────────────────────────────────────────────
+    function _reapplyAppIcons() {
+        for (let _k = 0; _k < filteredModel.count; _k++) {
+            let _name = filteredModel.get(_k).fileName;
+            if (filteredModel.get(_k).fileIsDir || !/\.AppImage$/i.test(_name)) continue;
+            let _matchBase = _name.replace(/\.AppImage$/i, "").toLowerCase();
+            for (let _stem in _cachedAppIcons) {
+                if (_matchBase.includes(_stem)) {
+                    filteredModel.setProperty(_k, "appIcon", _cachedAppIcons[_stem]);
+                    break;
+                }
+            }
+        }
+    }
+
+    function _extractMissingIcons() {
+        let needExtract = [];
+        for (let _k = 0; _k < filteredModel.count; _k++) {
+            let item = filteredModel.get(_k);
+            if (item.fileIsDir || !/\.AppImage$/i.test(item.fileName)) continue;
+            if (item.appIcon && item.appIcon !== "") continue;
+            let _matchBase = item.fileName.replace(/\.AppImage$/i, "").toLowerCase();
+            // check global cache
+            if (_cachedAppIcons[_matchBase]) continue;
+            let clean = _matchBase.replace(/[-_]\d+([-_.]\d+)*[-_](x86_64|amd64|aarch64|arm64|i686)$/, "")
+                .replace(/[-_](x86_64|amd64|aarch64|arm64|i686)$/, "")
+                .replace(/[-_]\d+([-_.]\d+)*[-_]linux[-_](amd64|x86_64)$/, "")
+                .replace(/[-_]linux[-_](amd64|x86_64)$/, "")
+                .replace(/[-_]linux-(amd64|x86_64)$/, "")
+                .replace(/[-_]\d+([-_.]\d+)*([-_][a-z]*\d*)?$/i, "")
+                .replace(/(\.v?\d+([-_.]\d+)*([-_.][a-z]+\d*)?)$/i, "")
+                .replace(/[-_](fixed|stable|beta|alpha|rc|patch|debug|release|final|portable|setup|linux)$/i, "");
+            if (_cachedAppIcons[clean]) continue;
+            needExtract.push({ index: _k, name: item.fileName, appName: clean || _matchBase, path: item.filePath });
+        }
+        if (needExtract.length === 0) return;
+        root._extractNext(needExtract, 0);
+    }
+
+    function _extractNext(list, idx) {
+        if (idx >= list.length) return;
+        if (!list[idx]) { root._extractNext(list, idx + 1); return; }
+        let app = list[idx];
+        let appPath = root._cleanPath(app.path);
+        // extract using simplified name (no version/arch)
+        let rawName = app.appName;
+        let cleanName = rawName.replace(/[-_]\d+([-_.]\d+)*[-_](x86_64|amd64|aarch64|arm64|i686)$/, "")
+            .replace(/[-_](x86_64|amd64|aarch64|arm64|i686)$/, "")
+            .replace(/[-_]\d+([-_.]\d+)*[-_]linux[-_](amd64|x86_64)$/, "")
+            .replace(/[-_]linux[-_](amd64|x86_64)$/, "")
+            .replace(/[-_]linux-(amd64|x86_64)$/, "")
+            .replace(/[-_]\d+([-_.]\d+)*([-_][a-z]*\d*)?$/i, "")
+            .replace(/(\.v?\d+([-_.]\d+)*([-_.][a-z]+\d*)?)$/i, "")
+            .replace(/[-_](fixed|stable|beta|alpha|rc|patch|debug|release|final|portable|setup|linux)$/i, "");
+        let safePath = appPath.replace(/'/g, "'\\''");
+        let safeDir = root._appIconCacheDir.replace(/'/g, "'\\''");
+        let safeTmp = (root._appIconCacheDir + "/tmp-" + cleanName).replace(/'/g, "'\\''");
+
+        Proc.runCommand("extract-" + idx, ["sh", "-c",
+            "mkdir -p '" + safeDir + "' && " +
+            "rm -rf '" + safeTmp + "' && mkdir -p '" + safeTmp + "' && " +
+            "cd '" + safeTmp + "' && " +
+            "T='timeout 45'; " +
+            "if ! command -v timeout >/dev/null 2>&1; then T=''; fi; " +
+            "$T '" + safePath + "' --appimage-extract >/dev/null 2>&1; " +
+            "RES=''; " +
+            "for icon in $(find squashfs-root -maxdepth 5 -name '*.png' 2>/dev/null | head -5); do " +
+            "  R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
+            "  [ -f \"$R\" ] && cp \"$R\" '" + safeDir + "/" + cleanName + ".png' 2>/dev/null && RES='" + cleanName + ".png' && break; " +
+            "done; " +
+            "if [ -z \"$RES\" ]; then " +
+            "  for icon in $(find squashfs-root -maxdepth 5 -name '*.svg' -o -name '.DirIcon' 2>/dev/null | head -5); do " +
+            "    R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
+            "    [ -f \"$R\" ] && EXT=\"${R##*.}\" && " +
+            "    if [ \"$EXT\" = \"DirIcon\" ]; then " +
+            "      cp \"$R\" '" + safeDir + "/" + cleanName + ".png' 2>/dev/null && RES='" + cleanName + ".png' && break; " +
+            "    else " +
+            "      cp \"$R\" '" + safeDir + "/" + cleanName + ".svg' 2>/dev/null && RES='" + cleanName + ".svg' && break; " +
+            "    fi; " +
+            "  done; " +
+            "fi; " +
+            "rm -rf '" + safeTmp + "'; " +
+            "ls -1 '" + safeDir + "/" + cleanName + ".*' 2>/dev/null | head -1 || echo '0'"
+        ], function(out) {
+            let r = String(out).trim();
+            if (r && r !== "0") {
+                let stem = cleanName.toLowerCase();
+                _cachedAppIcons[stem] = "file://" + root._appIconCacheDir + "/" + r.split("/").pop();
+                root._reapplyAppIcons();
+            }
+            root._extractNext(list, idx + 1);
+        });
     }
 }
