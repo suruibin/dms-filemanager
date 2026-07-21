@@ -50,9 +50,50 @@ git clone https://github.com/suruibin/dms-filemanager ~/.config/DankMaterialShel
 
 ## 依赖
 
+### 基础依赖
 - `python3` - 仅用于处理高级剪贴板粘贴操作（例如从剪贴板粘贴图片/截图）。
 - `wl-clipboard` - 用于 `wl-copy`（将非图片文件复制到剪贴板）和 `wl-paste`（粘贴时读取剪贴板）。
 - `glib2`（或 `gio`） - 用于将文件正常移到回收站（`gio trash`）。
+
+### Qt6 QML 模块依赖
+
+完整 Qt6 QML 模块跨发行版对照：
+
+| Qt 模块 | Arch Linux | Fedora | Ubuntu / Debian |
+|---------|-----------|--------|----------------|
+| Qt Core | `qt6-base` | `qt6-qtbase` | `qt6-base-dev` |
+| Qt QML / QtQuick | `qt6-declarative` | `qt6-qtdeclarative` | `qt6-declarative-dev` |
+| Qt Quick Controls | 含于 `qt6-declarative` | 含于 `qt6-qtdeclarative` | `qml6-module-qtquick-controls` |
+| Qt Quick Dialogs | 含于 `qt6-declarative` | 含于 `qt6-qtdeclarative` | `qml6-module-qtquick-dialogs` |
+| Qt Quick Layouts | 含于 `qt6-declarative` | 含于 `qt6-qtdeclarative` | `qml6-module-qtquick-layouts` |
+| Qt Quick Templates | 含于 `qt6-declarative` | 含于 `qt6-qtdeclarative` | `qml6-module-qtquick-templates` |
+| Qt Quick Window | 含于 `qt6-declarative` | 含于 `qt6-qtdeclarative` | `qml6-module-qtquick-window` |
+| Qt SVG | `qt6-svg` | `qt6-qtsvg` | `libqt6svg6-dev` |
+| Qt Wayland | `qt6-wayland` | `qt6-qtwayland` | `qt6-wayland-dev` |
+| Qt Multimedia | `qt6-multimedia-ffmpeg` | `qt6-qtmultimedia` | `qml6-module-qtmultimedia` |
+| Qt ShaderTools | `qt6-shadertools` | `qt6-qtshadertools` | `qt6-shadertools-dev` |
+| Qt Tools | `qt6-tools` | `qt6-qttools` | `qt6-tools-dev` |
+
+### `Qt.labs.platform` 和 `Qt5Compat.GraphicalEffects`
+
+| Qt 模块 | Arch Linux | Fedora | Ubuntu / Debian |
+|---------|-----------|--------|----------------|
+| `Qt.labs.platform` | `qt6-declarative` ✅ | `qt6-qtdeclarative` | `qml6-module-qt-labs-platform` |
+| `Qt5Compat.GraphicalEffects` | `qt6-5compat` ✅ | `qt6-qt5compat` | `qml6-module-qt5compat-graphicaleffects` |
+
+**安装命令：**
+
+```bash
+# Arch Linux（通常已有，无需额外操作）
+sudo pacman -S --needed qt6-declarative qt6-5compat
+
+# Fedora
+sudo dnf install qt6-qtdeclarative qt6-qt5compat
+
+# Ubuntu / Debian
+sudo apt install qml6-module-qt-labs-platform qml6-module-qt5compat-graphicaleffects
+```
+
 
 ## 许可证
 
