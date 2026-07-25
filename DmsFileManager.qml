@@ -908,13 +908,36 @@ DesktopPluginComponent {
     }
 
     function _executePaste(ops, overwrite) {
+        // batch copy/move: single process for all files
+        let srcs = [];
+        let dests = [];
+        let isCut = ops.length > 0 && ops[0].isCut;
         for (var i = 0; i < ops.length; i++) {
             var op = ops[i];
             if (!overwrite && op.conflict) continue;
-            if (op.isCut) {
-                Quickshell.execDetached(["mv", op.src, op.dest]);
-            } else {
-                Quickshell.execDetached(["cp", "-a", op.src, op.dest]);
+            srcs.push(op.src);
+            dests.push(op.dest);
+        }
+        if (srcs.length === 0) return;
+        // all dest paths share the same parent directory; extract it
+        let commonDest = dests[0].substring(0, dests[0].lastIndexOf('/'));
+        for (let d of dests) {
+            let p = d.substring(0, d.lastIndexOf('/'));
+            if (p !== commonDest) { commonDest = ""; break; }
+        }
+        if (commonDest) {
+            // batch: cp -a src1 src2 ... destDir/
+            let args = isCut ? ["mv"] : ["cp", "-a"];
+            args = args.concat(srcs).concat([commonDest + "/"]);
+            Quickshell.execDetached(args);
+        } else {
+            // fallback: one by one
+            for (var j = 0; j < srcs.length; j++) {
+                if (isCut) {
+                    Quickshell.execDetached(["mv", srcs[j], dests[j]]);
+                } else {
+                    Quickshell.execDetached(["cp", "-a", srcs[j], dests[j]]);
+                }
             }
         }
         root.copiedFilePaths = [];

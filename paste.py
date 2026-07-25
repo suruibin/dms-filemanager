@@ -21,29 +21,29 @@ def uri_to_path(line):
 
 
 def transfer_paths(paths, target_dir, action="copy"):
-    """Copy (or move, when action == 'cut') the given paths into target_dir."""
+    """Copy (or move, when action == 'cut') the given paths into target_dir.
+
+    Uses cp/mv in batch for maximum performance.
+    """
+    # filter out invalid paths
     target_real = os.path.realpath(target_dir)
+    valid = []
     for src in paths:
         try:
-            # Skip no-op transfers onto the folder the item already lives in;
-            # copying a file onto itself would otherwise raise SameFileError.
             if os.path.realpath(os.path.dirname(src)) == target_real:
-                continue
-            # Skip copying a directory onto itself or into one of its own
-            # descendants; copytree would otherwise recurse into the destination
-            # it just created (nested self-copy / RecursionError).
+                continue  # skip no-op self-copy
             src_real = os.path.realpath(src)
             if os.path.isdir(src) and os.path.commonpath([src_real, target_real]) == src_real:
-                continue
-            if action == "cut":
-                shutil.move(src, target_dir)
-            elif os.path.isdir(src):
-                dest = os.path.join(target_dir, os.path.basename(src))
-                shutil.copytree(src, dest, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, target_dir)
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
+                continue  # skip dir → descendant copy
+            valid.append(src)
+        except Exception:
+            pass
+    if not valid:
+        return
+    if action == "cut":
+        subprocess.check_call(["mv"] + valid + [target_dir])
+    else:
+        subprocess.check_call(["cp", "-a"] + valid + [target_dir])
 
 
 def handle_drop(target_dir, uris):
