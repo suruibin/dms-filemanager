@@ -48,7 +48,6 @@
   "Feedback & Support": "Feedback & Support",
   "File Copied": "Đã sao chép tệp",
   "File name...": "Tên tập tin...",
-
   "File Type": "Kiểu tập tin",
   "Files Only": "Chỉ Tệp",
   "Float File": "Tệp Float",
@@ -162,5 +161,13 @@
   "Information": "Thông tin",
   "Extract AppImage Icons": "Trích xuất biểu tượng AppImage",
   "Extract icons from AppImage files for display": "Tự động trích xuất biểu tượng AppImage khi vào thư mục",
-  "参考": "Tham khảo"
+  "参考": "Tham khảo",
+  "Paste in progress": "Đang dán",
+  "Pasted": "Đã dán",
+  "item(s)": "mục",
+  "Paste failed": "Dán thất bại",
+  "Cancelled": "Đã hủy",
+  "Preparing paste...": "Đang chuẩn bị dán...",
+  "Moving": "Đang di chuyển",
+  "Copying": "Đang sao chép"
 }

@@ -8,7 +8,7 @@ import "../dms-common"
 Popup {
     id: renameDialog
     width: 260
-    height: 100
+    height: 86
     padding: 0
     modal: false
     focus: true
@@ -26,6 +26,8 @@ Popup {
     property string fileExt: ""
     property bool isDir: false
     property var inputField: null
+    // Custom background color injected from the plugin root (empty = theme)
+    property string popupColor: ""
 
     TextMetrics {
         id: _dialogMetrics
@@ -92,7 +94,7 @@ Popup {
     }
 
     contentItem: Rectangle {
-        color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+        color: popupColor !== "" ? popupColor : Theme.withAlpha(Theme.surfaceContainer, 0.95)
         radius: Theme.cornerRadius
         border.color: Theme.withAlpha(Theme.outline, 0.15)
         border.width: 1
@@ -105,6 +107,7 @@ Popup {
             DankTextField {
                 id: renameField
                 width: parent.width
+                height: 30
                 placeholderText: i18n("Enter new name...")
                 focus: true
                 onAccepted: renameDialog.performRename()
@@ -121,7 +124,7 @@ Popup {
 
                 DankButton {
                     text: i18n("Rename")
-                    buttonHeight: 28
+                    buttonHeight: 24
                     backgroundColor: Theme.primary
                     textColor: Theme.primaryText
                     onClicked: renameDialog.performRename()
@@ -129,7 +132,7 @@ Popup {
 
                 DankButton {
                     text: i18n("Cancel")
-                    buttonHeight: 28
+                    buttonHeight: 24
                     backgroundColor: Theme.surfaceContainerHigh
                     textColor: Theme.surfaceText
                     onClicked: renameDialog.close()

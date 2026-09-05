@@ -48,7 +48,6 @@
   "Feedback & Support": "Feedback & Support",
   "File Copied": "Datei kopiert",
   "File name...": "Dateiname...",
-
   "File Type": "Dateityp",
   "Files Only": "Nur Dateien",
   "Float File": "Float-Datei",
@@ -162,5 +161,13 @@
   "Information": "Informationen",
   "Extract AppImage Icons": "AppImage-Symbole extrahieren",
   "Extract icons from AppImage files for display": "Beim Betreten eines Verzeichnisses automatisch AppImage-Symbole extrahieren",
-  "参考": "Referenz"
+  "参考": "Referenz",
+  "Paste in progress": "Einfügen läuft",
+  "Pasted": "Eingefügt",
+  "item(s)": "Element(e)",
+  "Paste failed": "Einfügen fehlgeschlagen",
+  "Cancelled": "Abgebrochen",
+  "Preparing paste...": "Einfügen wird vorbereitet...",
+  "Moving": "Wird verschoben",
+  "Copying": "Wird kopiert"
 }

@@ -34,12 +34,13 @@ PluginSettings {
         SectionTitle { 
             text: i18n("Appearance")
             icon: "palette" 
-            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || folderDropdownOpacity.isDirty || popupColor.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
+            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || folderDropdownOpacity.isDirty || popupColor.isDirty || sidebarColor.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
             onResetClicked: {
                 backgroundOpacity.resetToDefault();
                 borderOpacity.resetToDefault();
                 folderDropdownOpacity.resetToDefault();
                 popupColor.resetToDefault();
+                sidebarColor.resetToDefault();
                 cellSize.resetToDefault();
                 viewMode.resetToDefault();
                 headerPosition.resetToDefault();
@@ -97,7 +98,7 @@ PluginSettings {
             width: parent.width
             implicitHeight: 50
 
-            readonly property string value: pluginData?.popupColor ?? ""
+            readonly property string value: pluginData?.popupColor ?? "#3E2A4D"
             readonly property bool isDirty: false
 
             function resetToDefault() {
@@ -121,7 +122,7 @@ PluginSettings {
 
                 Repeater {
                     // "" = follow theme surface color, "custom" = color picker
-                    model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#263238", "#1E1E2E", "#14141B", "#000000", "custom"]
+                    model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#3E2A4D", "#263238", "#1E1E2E", "#14141B", "#000000", "custom"]
 
                     delegate: Rectangle {
                         width: 14; height: 14
@@ -157,6 +158,89 @@ PluginSettings {
                     selectedColor: popupColor.value === "" ? Theme.surfaceContainer : popupColor.value
                     onAccepted: {
                         if (pluginService) pluginService.savePluginData("dmsfilemanager", "popupColor", selectedColor.toString());
+                    }
+                }
+            }
+        }
+
+        Separator {}
+
+        Item {
+            id: sidebarColor
+            width: parent.width
+            implicitHeight: 50
+
+            readonly property string value: pluginData?.sidebarColor ?? ""
+            readonly property bool isDirty: false
+
+            function resetToDefault() {
+                if (pluginService)
+                    pluginService.savePluginData("dmsfilemanager", "sidebarColor", "");
+            }
+
+            StyledText {
+                text: i18n("SideBar Color")
+                font.pixelSize: Theme.fontSizeLarge
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+                anchors.left: parent.left
+                anchors.top: parent.top
+            }
+
+            Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                spacing: 6
+
+                Repeater {
+                    // "" = follow theme surface color; palette matches Empty File Color
+                    model: ["", "#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4"]
+
+                    delegate: Rectangle {
+                        width: 14; height: 14; radius: modelData === "" ? 7 : 2
+                        color: modelData === "" ? Theme.surfaceContainer : modelData
+                        border.width: sidebarColor.value === modelData ? 2 : 1
+                        border.color: sidebarColor.value === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (pluginService)
+                                    pluginService.savePluginData("dmsfilemanager", "sidebarColor", modelData);
+                            }
+                        }
+                    }
+                }
+
+                // Color picker
+                Rectangle {
+                    width: 18; height: 18; radius: 4
+                    color: "white"
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.outline, 0.3)
+
+                    StyledText {
+                        anchors.centerIn: parent
+                        text: "+"
+                        font.pixelSize: 16
+                        color: "red"
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: sidebarColorDialog.open()
+                    }
+                }
+
+                ColorDialog {
+                    id: sidebarColorDialog
+                    title: i18n("SideBar Color")
+                    selectedColor: sidebarColor.value === "" ? Theme.surfaceContainer : sidebarColor.value
+                    onAccepted: {
+                        if (pluginService) pluginService.savePluginData("dmsfilemanager", "sidebarColor", selectedColor.toString());
                     }
                 }
             }
@@ -242,7 +326,7 @@ PluginSettings {
             width: parent.width
             implicitHeight: 50
 
-            readonly property string value: pluginData?.emptyColor ?? "#FF1744"
+            readonly property string value: pluginData?.emptyColor ?? "#FFEA00"
             readonly property bool isDirty: false
 
             function resetToDefault() {
@@ -265,11 +349,12 @@ PluginSettings {
                 spacing: 6
 
                 Repeater {
-                    model: ["#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4", "#795548"]
+                    // "" = follow theme (primary); no brown in palette
+                    model: ["", "#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4"]
 
                     delegate: Rectangle {
-                        width: 14; height: 14; radius: 2
-                        color: modelData
+                        width: 14; height: 14; radius: modelData === "" ? 7 : 2
+                        color: modelData === "" ? Theme.primary : modelData
                         border.width: emptyColor.value === modelData ? 2 : 1
                         border.color: emptyColor.value === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
 
@@ -309,7 +394,7 @@ PluginSettings {
                 ColorDialog {
                     id: emptyColorDialog
                     title: i18n("Empty File Color")
-                    selectedColor: emptyColor.value
+                    selectedColor: emptyColor.value === "" ? Theme.primary : emptyColor.value
                     onAccepted: {
                         if (pluginService) pluginService.savePluginData("dmsfilemanager", "emptyColor", selectedColor.toString());
                     }

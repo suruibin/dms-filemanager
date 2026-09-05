@@ -48,7 +48,6 @@
   "Feedback & Support": "Feedback & Support",
   "File Copied": "파일이 복사되었습니다",
   "File name...": "파일 이름...",
-
   "File Type": "파일 형식",
   "Files Only": "파일만",
   "Float File": "파일 띄우기",
@@ -162,5 +161,13 @@
   "Information": "정보",
   "Extract AppImage Icons": "AppImage 아이콘 추출",
   "Extract icons from AppImage files for display": "디렉토리 진입 시 AppImage 아이콘 자동 추출",
-  "参考": "참조"
+  "参考": "참조",
+  "Paste in progress": "붙여넣기 진행 중",
+  "Pasted": "붙여넣기 완료",
+  "item(s)": "개",
+  "Paste failed": "붙여넣기 실패",
+  "Cancelled": "취소됨",
+  "Preparing paste...": "붙여넣기 준비 중...",
+  "Moving": "이동 중",
+  "Copying": "복사 중"
 }

@@ -48,7 +48,6 @@
   "Feedback & Support": "反馈与支持",
   "File Copied": "文件已复制",
   "File name...": "文件名...",
-
   "File Type": "文件类型",
   "Files Only": "仅文件",
   "Float File": "浮动文件",
@@ -163,5 +162,13 @@
   "Create failed": "创建失败",
   "Extract AppImage Icons": "解压AppImage图标",
   "Extract icons from AppImage files for display": "进入目录时自动解压AppImage程序图标",
-  "参考": "参考"
+  "参考": "参考",
+  "Paste in progress": "粘贴进行中",
+  "Pasted": "已粘贴",
+  "item(s)": "项",
+  "Paste failed": "粘贴失败",
+  "Cancelled": "已取消",
+  "Preparing paste...": "正在准备粘贴...",
+  "Moving": "正在移动",
+  "Copying": "正在复制"
 }

@@ -124,7 +124,7 @@ Item {
                 Rectangle {
                     anchors.centerIn: parent
                     width: 8; height: 8; radius: 4
-                    color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyColor : "red"
+                    color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyIndicatorColor : "red"
                     visible: delegate.isEmpty
                 }
                 // Favorite star on icon center - click to remove, show X on hover
@@ -198,7 +198,7 @@ Item {
             // Indicators after name: empty dot + favorite star
             Text {
                 text: delegate.isEmpty ? "●" : ""
-                color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyColor : "red"
+                color: delegate.dmsFileManager ? delegate.dmsFileManager.emptyIndicatorColor : "red"
                 font.pixelSize: delegate.labelPixelSize - 2
                 anchors.verticalCenter: parent.verticalCenter
             }

@@ -26,6 +26,8 @@ Popup {
     property string filePath: ""
     property string fileName: ""
     property bool isDir: false
+    // Custom background color injected from the plugin root (empty = theme)
+    property string popupColor: ""
     
     // Info fields
     property string fileType: ""
@@ -88,7 +90,7 @@ Popup {
     }
 
     contentItem: Rectangle {
-        color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+        color: popupColor !== "" ? popupColor : Theme.withAlpha(Theme.surfaceContainer, 0.95)
         radius: Theme.cornerRadius
         border.color: Theme.withAlpha(Theme.outline, 0.15)
         border.width: 1
@@ -192,14 +194,13 @@ Popup {
                 Rectangle {
                     width: parent.width
                     height: pathText.implicitHeight + 16
-                    color: Theme.withAlpha(Theme.surfaceContainerHigh, 0.5)
-                    radius: 4
-                    border.color: Theme.withAlpha(Theme.outline, 0.1)
+                    color: "transparent"
 
                     StyledText {
                         id: pathText
                         anchors.fill: parent
                         anchors.margins: 8
+                        anchors.rightMargin: 30
                         text: infoDialog.filePath
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceVariantText
@@ -207,23 +208,28 @@ Popup {
                         font.family: "monospace"
                     }
 
+                    // Green check after copying (stays visible until dialog reopens)
+                    DankIcon {
+                        id: pathCheck
+                        name: "check_circle"
+                        size: 16
+                        color: Theme.success
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 8
+                        visible: false
+                    }
+
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             Quickshell.execDetached(["dms", "cl", "copy", infoDialog.filePath]);
-                            ToastService.showToast(i18n("Path copied to clipboard"), ToastService.levelInfo);
+                            pathCheck.visible = true;
                         }
                     }
                 }
-            }
-
-            DankButton {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: i18n("Close")
-                backgroundColor: Theme.surfaceContainerHigh
-                textColor: Theme.surfaceText
-                onClicked: infoDialog.close()
             }
         }
     }
@@ -247,21 +253,36 @@ Popup {
         infoDialog.fileModified = "..."
         infoDialog.fileSize = "..."
         infoDialog.fileOwner = "..."
+        pathCheck.visible = false
         
         infoDialog.open();
         fetchInfo();
     }
 
+    // Map stat's C-locale %F output to translated type labels
+    function mapFileType(raw) {
+        const t = raw.toLowerCase();
+        if (t.indexOf("directory") !== -1) return i18n("Folder");
+        if (t.indexOf("symbolic link") !== -1) return i18n("Symbolic Link");
+        if (t.indexOf("regular empty file") !== -1) return i18n("Empty File");
+        if (t.indexOf("regular file") !== -1) return i18n("File");
+        if (t.indexOf("block") !== -1) return i18n("Block Device");
+        if (t.indexOf("character") !== -1) return i18n("Character Device");
+        if (t.indexOf("fifo") !== -1) return i18n("FIFO");
+        if (t.indexOf("socket") !== -1) return i18n("Socket");
+        return raw;
+    }
+
     function fetchInfo() {
         const path = infoDialog.filePath;
-        // %F|%A|%y|%s|%U|%G
-        const statCmd = ["stat", "-c", "%F|%A|%y|%s|%U|%G", path];
-        
+        // %F|%A|%y|%s|%U|%G — LC_ALL=C keeps %F unlocalized; labels are translated via i18n
+        const statCmd = ["sh", "-c", "LC_ALL=C stat -c '%F|%A|%y|%s|%U|%G' \"$1\"", "sh", path];
+
         Proc.runCommand("get-file-info-structured", statCmd, (output, exitCode) => {
             if (exitCode === 0) {
                 const parts = output.trim().split('|');
                 if (parts.length >= 6) {
-                    infoDialog.fileType = parts[0];
+                    infoDialog.fileType = mapFileType(parts[0]);
                     infoDialog.filePermissions = parts[1];
                     infoDialog.fileModified = parts[2].split('.')[0]; // Remove nanoseconds
                     infoDialog.fileOwner = parts[4] + ":" + parts[5];

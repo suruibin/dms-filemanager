@@ -48,7 +48,6 @@
   "Feedback & Support": "Appréciation et support",
   "File Copied": "Fichier copié",
   "File name...": "Nom de fichier...",
-
   "File Type": "Type de fichier",
   "Files Only": "Fichiers seulement",
   "Float File": "Lime flottante",
@@ -162,5 +161,13 @@
   "Information": "Informations",
   "Extract AppImage Icons": "Extraire les icônes AppImage",
   "Extract icons from AppImage files for display": "Extraire automatiquement les icônes AppImage à l'entrée d'un dossier",
-  "参考": "Référence"
+  "参考": "Référence",
+  "Paste in progress": "Collage en cours",
+  "Pasted": "Collé",
+  "item(s)": "élément(s)",
+  "Paste failed": "Échec du collage",
+  "Cancelled": "Annulé",
+  "Preparing paste...": "Préparation du collage...",
+  "Moving": "Déplacement",
+  "Copying": "Copie"
 }

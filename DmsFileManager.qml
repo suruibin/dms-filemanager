@@ -36,16 +36,17 @@ DesktopPluginComponent {
     minHeight: 200
     
     // Default initial size if not set
-    widgetWidth: pluginData.widgetWidth ?? 937
-    widgetHeight: pluginData.widgetHeight ?? 503
+    widgetWidth: pluginData.widgetWidth ?? 1010
+    widgetHeight: pluginData.widgetHeight ?? 497
 
     // Settings config
     readonly property real backgroundOpacity: (pluginData.backgroundOpacity ?? 0) / 100
-    readonly property real borderOpacity: (pluginData.borderOpacity ?? 100) / 100
-    readonly property real folderDropdownOpacity: (pluginData.folderDropdownOpacity ?? 95) / 100
-    property string popupColor: pluginData.popupColor ?? ""
+    readonly property real borderOpacity: (pluginData.borderOpacity ?? 39) / 100
+    readonly property real folderDropdownOpacity: (pluginData.folderDropdownOpacity ?? 17) / 100
+    property string popupColor: pluginData.popupColor ?? "#3E2A4D"
+    property string sidebarColor: pluginData.sidebarColor ?? ""
     property bool showHidden: pluginData.showHidden ?? false
-    property int cellSize: pluginData.cellSize ?? 94
+    property int cellSize: pluginData.cellSize ?? 78
     readonly property double sizeScale: cellSize / 84.0
     readonly property string sortBy: pluginData.sortBy ?? "type"
     readonly property string viewMode: pluginData.viewMode ?? "grid"
@@ -53,6 +54,44 @@ DesktopPluginComponent {
     property bool showHeader: pluginData.showHeader ?? true
     readonly property var pinnedPaths: pluginData.pinnedPaths ?? []
     onPinnedPathsChanged: { updateFilteredModel(); buildFolderDropdownModel(); }
+
+    // Close-on-outside-click for all popups: the modal grab only covers this
+    // surface, so presses outside the plugin never reach the Popups. Track
+    // the Niri focused toplevel instead — clicking another app or the desktop
+    // shifts focus and closes them; clicking inside the plugin leaves focus
+    // (and open popups) untouched.
+    readonly property int _niriFocusedWindowId: {
+        const wins = CompositorService.isNiri ? NiriService.windows : [];
+        for (var i = 0; i < wins.length; i++)
+            if (wins[i].is_focused)
+                return wins[i].id;
+        return -1;
+    }
+    on_NiriFocusedWindowIdChanged: closeAllTransientPopups()
+
+    function closeAllTransientPopups() {
+        if (viewModeDropdown.visible) viewModeDropdown.close();
+        if (settingsDropdown.visible) settingsDropdown.close();
+        if (quickMenu.visible) quickMenu.close();
+        if (trashActionPopup.visible) trashActionPopup.close();
+        // Overwrite dialog has no outside-close policy of its own; dismissing
+        // it on focus loss also discards the pending paste ops.
+        if (overwriteDialog.opened) { overwriteDialog.close(); root._pastePendingOps = []; root._pasteOverwriteAll = false; }
+        // Pinned sidebar is a persistent panel — only close when unpinned.
+        if (!sidebarPinned && folderDropdown.opened) folderDropdown.close();
+        if (emptyTrashConfirm.visible) emptyTrashConfirm.close();
+        if (driveListPopup.visible) driveListPopup.close();
+        if (createDropdown.visible) createDropdown.close();
+        if (sortByDropdown.visible) sortByDropdown.close();
+        if (filterDropdown.visible) filterDropdown.close();
+        if (previewPopup.visible) previewPopup.close();
+        if (folderPathEditMode) {
+            folderPathEditMode = false;
+            pathCompletionPopup.close();
+            _pathCompletions = [];
+            _pathCompletionIndex = -1;
+        }
+    }
 
     property var folderDropdownModel: []
 
@@ -246,11 +285,13 @@ DesktopPluginComponent {
     property string lastSelectedFilePath: ""
     property string searchPattern: ""
     property string selectedFileInfo: ""
-    property bool extractAppIcons: pluginData.extractAppIcons === true
+    property bool extractAppIcons: pluginData.extractAppIcons !== false
     onExtractAppIconsChanged: { if (extractAppIcons) refreshCurrentFolder(); }
     readonly property string _appIconCacheDir: String(Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation)).replace(/^file:\/\//, "") + "/.config/DankMaterialShell/appicons"
     property var _cachedAppIcons: ({})
-    property string emptyColor: pluginData.emptyColor ?? "#00BFA5"
+    property string emptyColor: pluginData.emptyColor ?? "#FFEA00"
+    // Resolved color for the empty indicator dot: "" (follow theme) → primary
+    readonly property string emptyIndicatorColor: emptyColor !== "" ? emptyColor : Theme.primary
     property string folderColor: pluginData.folderColor ?? "#00BCD4"
     readonly property var favoritePaths: pluginData.favoritePaths ?? []
     onFavoritePathsChanged: buildFolderDropdownModel()
@@ -291,6 +332,20 @@ DesktopPluginComponent {
     property bool cutMode: false
     property var _pastePendingOps: []  // Array of {src, dest, isCut, conflict} pending user confirmation
     property bool _pasteOverwriteAll: false
+
+    // Paste progress (fed by paste.py stdout protocol: T/P/E/S lines)
+    property bool pasteActive: false
+    property string pastePhase: "running"  // running | done | failed | cancelled
+    property string pasteCurrentName: ""
+    property real pasteDone: 0
+    property real pasteTotal: 0
+    property int pasteOkCount: 0
+    property int pasteFailCount: 0
+    property bool _pasteHadJobs: false  // whether the last run actually transferred anything
+    property bool _pasteIsMove: false   // true when the current run moves (cut) instead of copies
+    property string _pasteLastError: ""  // error message from paste.py (E line)
+    property string _pasteStderr: ""     // stderr tail for crash diagnosis
+    property var _pasteErrors: []
 
     function _syncToSystemClipboard() {
         if (root.copiedFilePaths.length === 0) return;
@@ -889,11 +944,10 @@ DesktopPluginComponent {
     }
 
     function pasteFromClipboard() {
-        let scriptPath = decodeURIComponent(root._cleanPath(Qt.resolvedUrl("paste.py")));
+        // paste.py reads the system clipboard itself and streams progress
+        // lines on stdout, which pasteProc turns into the progress pill.
         let pathStr = decodeURIComponent(root._cleanPath(root.targetFolderUrl));
-
-        ToastService.showToast(i18n("Pasting files..."), ToastService.levelInfo);
-        Quickshell.execDetached([scriptPath, pathStr]);
+        _startPasteProcess([pathStr]);
     }
 
     function dropFiles(urls) {
@@ -901,27 +955,99 @@ DesktopPluginComponent {
         let fileUris = urls.map(u => String(u)).filter(u => u.startsWith("file://"));
         if (fileUris.length === 0) return;
 
-        let scriptPath = decodeURIComponent(root._cleanPath(Qt.resolvedUrl("paste.py")));
         let pathStr = decodeURIComponent(root._cleanPath(root.targetFolderUrl));
+        _startPasteProcess(["--drop", pathStr].concat(fileUris));
+    }
 
-        ToastService.showToast(i18n("Copying files..."), ToastService.levelInfo);
-        Quickshell.execDetached([scriptPath, "--drop", pathStr].concat(fileUris));
+    function _startPasteProcess(args) {
+        if (root.pasteActive) {
+            ToastService.showToast(i18n("Paste in progress"), ToastService.levelInfo);
+            return;
+        }
+        let scriptPath = decodeURIComponent(root._cleanPath(Qt.resolvedUrl("paste.py")));
+        root.pasteActive = true;
+        root.pastePhase = "running";
+        root.pasteCurrentName = "";
+        root.pasteDone = 0;
+        root.pasteTotal = 0;
+        root.pasteOkCount = 0;
+        root.pasteFailCount = 0;
+        root._pasteHadJobs = false;
+        root._pasteIsMove = false;
+        root._pasteLastError = "";
+        root._pasteStderr = "";
+        root._pasteErrors = [];
+        pasteProc.command = [scriptPath].concat(args);
+        pasteProc.running = true;
+    }
+
+    function _handlePasteProgress(line) {
+        var parts = String(line).split("\t");
+        if (parts[0] === "A") {
+            root._pasteIsMove = parts[1] === "move";
+        } else if (parts[0] === "T") {
+            root.pasteTotal = Number(parts[1]) || 0;
+            root._pasteHadJobs = root.pasteTotal > 0;
+        } else if (parts[0] === "P") {
+            root.pasteDone = Number(parts[1]) || 0;
+            if (parts.length > 2) root.pasteTotal = Number(parts[2]) || root.pasteTotal;
+            root.pasteCurrentName = parts.length > 3 ? parts[3] : "";
+        } else if (parts[0] === "E") {
+            root._pasteErrors.push(parts.length > 1 ? parts[1] : "?");
+            if (parts.length > 2) root._pasteLastError = parts[2];
+        } else if (parts[0] === "S") {
+            root.pasteOkCount = Number(parts[1]) || 0;
+            root.pasteFailCount = Number(parts[2]) || 0;
+            root._pasteHadJobs = root._pasteHadJobs || root.pasteOkCount > 0 || root.pasteFailCount > 0;
+        }
+    }
+
+    function cancelPaste() {
+        if (pasteProc.running) {
+            root.pastePhase = "cancelled";
+            pasteProc.running = false;
+        }
     }
 
     function _executePaste(ops, overwrite) {
+        var args = ["--ops"];
+        var any = false;
         for (var i = 0; i < ops.length; i++) {
             var op = ops[i];
             if (!overwrite && op.conflict) continue;
-            if (op.isCut) {
-                Quickshell.execDetached(["mv", op.src, op.dest]);
-            } else {
-                Quickshell.execDetached(["cp", "-a", op.src, op.dest]);
-            }
+            args.push(op.isCut ? "move" : "copy");
+            args.push(op.src);
+            args.push(op.dest);
+            any = true;
         }
         root.copiedFilePaths = [];
         root.cutMode = false;
         root._pastePendingOps = [];
         root._pasteOverwriteAll = false;
+        if (any) _startPasteProcess(args);
+    }
+
+    function _finishPaste(exitCode) {
+        // Called when pasteProc exits. Refresh and show the outcome briefly.
+        var crashed = typeof exitCode === "number" && exitCode !== 0 && root.pastePhase !== "cancelled";
+        var phase = root.pastePhase === "cancelled" ? "cancelled"
+            : (root.pasteFailCount > 0 || crashed ? "failed" : "done");
+        root.pastePhase = phase;
+        root.refreshCurrentFolder();
+        if (phase === "failed") {
+            var detail = root._pasteLastError || root._pasteStderr.trim().split("\n").pop();
+            var name0 = root._pasteErrors.length > 0 ? root._pasteErrors[0].split("/").pop() : "";
+            ToastService.showToast(i18n("Paste failed") + (name0 ? (": " + name0 + " — " + detail) : (": " + detail)), ToastService.levelError);
+        } else if (phase === "done" && root._pasteHadJobs && root.pasteOkCount > 0) {
+            ToastService.showToast(i18n("Pasted") + " " + root.pasteOkCount + " " + i18n("item(s)"), ToastService.levelInfo);
+        }
+        // A no-op run (empty clipboard) hides instantly; others linger briefly.
+        if (phase === "done" && !root._pasteHadJobs) {
+            root.pasteActive = false;
+        } else {
+            pasteDoneTimer.interval = phase === "cancelled" ? 600 : 1200;
+            pasteDoneTimer.restart();
+        }
     }
 
     function _checkPasteConflicts(ops) {
@@ -2849,7 +2975,7 @@ DesktopPluginComponent {
                 Popup {
                     id: settingsDropdown
                     parent: settingsBtn
-                    width: 220
+                    width: 240
                     height: Math.min(500, settingsColumn.implicitHeight + Theme.spacingM * 2)
                     padding: 0
                     modal: true
@@ -2878,6 +3004,30 @@ DesktopPluginComponent {
                                 font.pixelSize: Theme.fontSizeSmall
                                 font.bold: true
                                 color: Theme.surfaceText
+                            }
+
+                            // Header: show toggle + position buttons (single row)
+                            Row { width: parent.width; height: 24; spacing: Theme.spacingS
+                                StyledText { text: i18n("Header"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 50; anchors.verticalCenter: parent.verticalCenter }
+                                Item { width: 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
+                                    DankIcon {
+                                        anchors.centerIn: parent; name: root.showHeader ? "toggle_on" : "toggle_off"; size: 24
+                                        color: root.showHeader ? Theme.primary : Theme.surfaceVariantText
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                            onClicked: { root.showHeader = !root.showHeader; if (pluginService) pluginService.savePluginData(pluginId, "showHeader", root.showHeader); settingsDropdown.close() } } }
+                                }
+                                Row { spacing: Theme.spacingXS; anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: root._headerPositionOptions
+                                        delegate: Rectangle {
+                                            width: 50; height: 22; radius: 4
+                                            color: (root.headerPosition === modelData.val) ? Theme.primary : (hpArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.1) : "transparent")
+                                            border.color: (root.headerPosition === modelData.val) ? Theme.primary : Theme.withAlpha(Theme.outline, 0.2)
+                                            border.width: 1
+                                            StyledText { anchors.centerIn: parent; text: modelData.label; font.pixelSize: Theme.fontSizeSmall - 1; color: (root.headerPosition === modelData.val) ? Theme.onPrimary : Theme.surfaceText }
+                                            MouseArea { id: hpArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                                onClicked: { if (pluginService) pluginService.savePluginData(pluginId, "headerPosition", modelData.val); settingsDropdown.close() } } } }
+                                }
                             }
 
                             // Background Opacity
@@ -2919,49 +3069,35 @@ DesktopPluginComponent {
                                 StyledText { text: Math.round(sbSlider.value) + "%"; font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceText; width: 35; anchors.verticalCenter: parent.verticalCenter }
                             }
 
-                            // Header Position
-                            Row { width: parent.width; height: 24; spacing: Theme.spacingS
-                                StyledText { text: i18n("Header"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 85; anchors.verticalCenter: parent.verticalCenter }
-                                Row { spacing: Theme.spacingXS; anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: root._headerPositionOptions
-                                        delegate: Rectangle {
-                                            width: 50; height: 22; radius: 4
-                                            color: (root.headerPosition === modelData.val) ? Theme.primary : (hpArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.1) : "transparent")
-                                            border.color: (root.headerPosition === modelData.val) ? Theme.primary : Theme.withAlpha(Theme.outline, 0.2)
-                                            border.width: 1
-                                            StyledText { anchors.centerIn: parent; text: modelData.label; font.pixelSize: Theme.fontSizeSmall - 1; color: (root.headerPosition === modelData.val) ? Theme.onPrimary : Theme.surfaceText }
-                                            MouseArea { id: hpArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                                onClicked: { if (pluginService) pluginService.savePluginData(pluginId, "headerPosition", modelData.val); settingsDropdown.close() } } } }
-                                }
-                            }
-
-                            // Show Header toggle
-                            Row { width: parent.width; height: 24; spacing: Theme.spacingS
-                                StyledText { text: i18n("Show Header"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText; width: 85; anchors.verticalCenter: parent.verticalCenter }
-                                Item { width: 40; height: parent.height; anchors.verticalCenter: parent.verticalCenter
-                                    DankIcon {
-                                        anchors.centerIn: parent; name: root.showHeader ? "toggle_on" : "toggle_off"; size: 24
-                                        color: root.showHeader ? Theme.primary : Theme.surfaceVariantText
-                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                            onClicked: { root.showHeader = !root.showHeader; if (pluginService) pluginService.savePluginData(pluginId, "showHeader", root.showHeader); settingsDropdown.close() } } }
-                                }
-                            }
-
                             // Empty indicator color
                             Column { width: parent.width; spacing: 6
                                 StyledText { text: i18n("Empty Color"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText }
                                 Row { spacing: 5
                                     Repeater {
-                                        model: ["#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4", "#795548"]
+                                        model: ["", "#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4"]
                                         delegate: Rectangle {
-                                            width: 14; height: 14; radius: 2
-                                            color: modelData
+                                            width: 14; height: 14; radius: modelData === "" ? 7 : 2
+                                            color: modelData === "" ? Theme.primary : modelData
                                             border.width: root.emptyColor === modelData ? 2 : 1
                                             border.color: root.emptyColor === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
                                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                                 onClicked: { root.emptyColor = modelData; if (pluginService) pluginService.savePluginData(pluginId, "emptyColor", modelData); settingsDropdown.close() } }
                                         }
+                                    }
+                                    // Custom color picker
+                                    Rectangle {
+                                        width: 18; height: 18; radius: 4
+                                        color: "white"
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outline, 0.3)
+                                        StyledText { anchors.centerIn: parent; text: "+"; font.pixelSize: 16; color: "red"; font.bold: true }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: gearEmptyColorDialog.open() }
+                                    }
+                                    ColorDialog {
+                                        id: gearEmptyColorDialog
+                                        title: i18n("Empty Color")
+                                        selectedColor: root.emptyColor !== "" ? root.emptyColor : Theme.primary
+                                        onAccepted: { if (pluginService) pluginService.savePluginData(pluginId, "emptyColor", selectedColor.toString()) }
                                     }
                                 }
                             }
@@ -2981,6 +3117,54 @@ DesktopPluginComponent {
                                                 onClicked: { root.folderColor = modelData; if (pluginService) pluginService.savePluginData(pluginId, "folderColor", modelData); settingsDropdown.close() } }
                                         }
                                     }
+                                    // Custom color picker
+                                    Rectangle {
+                                        width: 18; height: 18; radius: 4
+                                        color: "white"
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outline, 0.3)
+                                        StyledText { anchors.centerIn: parent; text: "+"; font.pixelSize: 16; color: "red"; font.bold: true }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: gearFolderColorDialog.open() }
+                                    }
+                                    ColorDialog {
+                                        id: gearFolderColorDialog
+                                        title: i18n("Folder Color")
+                                        selectedColor: root.folderColor !== "" ? root.folderColor : Theme.primary
+                                        onAccepted: { if (pluginService) pluginService.savePluginData(pluginId, "folderColor", selectedColor.toString()) }
+                                    }
+                                }
+                            }
+
+                            // SideBar background color (stays open for live preview)
+                            Column { width: parent.width; spacing: 6
+                                StyledText { text: i18n("SideBar Color"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText }
+                                Row { spacing: 5
+                                    Repeater {
+                                        model: ["", "#FF1744", "#00E676", "#FFEA00", "#448AFF", "#D500F9", "#00BFA5", "#FF9100", "#E91E63", "#00BCD4"]
+                                        delegate: Rectangle {
+                                            width: 14; height: 14; radius: modelData === "" ? 7 : 2
+                                            color: modelData === "" ? Theme.surfaceContainer : modelData
+                                            border.width: root.sidebarColor === modelData ? 2 : 1
+                                            border.color: root.sidebarColor === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                                onClicked: { root.sidebarColor = modelData; if (pluginService) pluginService.savePluginData(pluginId, "sidebarColor", modelData); settingsDropdown.close() } }
+                                        }
+                                    }
+                                    // Custom color picker
+                                    Rectangle {
+                                        width: 18; height: 18; radius: 4
+                                        color: "white"
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outline, 0.3)
+                                        StyledText { anchors.centerIn: parent; text: "+"; font.pixelSize: 16; color: "red"; font.bold: true }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: gearSidebarColorDialog.open() }
+                                    }
+                                    ColorDialog {
+                                        id: gearSidebarColorDialog
+                                        title: i18n("SideBar Color")
+                                        selectedColor: root.sidebarColor !== "" ? root.sidebarColor : Theme.surfaceContainer
+                                        onAccepted: { if (pluginService) pluginService.savePluginData(pluginId, "sidebarColor", selectedColor.toString()) }
+                                    }
                                 }
                             }
 
@@ -2989,21 +3173,28 @@ DesktopPluginComponent {
                                 StyledText { text: i18n("Popup Color"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText }
                                 Row { spacing: 5
                                     Repeater {
-                                        model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#263238", "#1E1E2E", "#14141B", "#000000", "custom"]
+                                        model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#3E2A4D", "#263238", "#1E1E2E", "#14141B", "#000000"]
                                         delegate: Rectangle {
                                             width: 14; height: 14
                                             radius: modelData === "" ? 7 : 2
-                                            color: modelData === "" ? Theme.surfaceContainer : (modelData === "custom" ? "white" : modelData)
+                                            color: modelData === "" ? Theme.surfaceContainer : modelData
                                             border.width: root.popupColor === modelData ? 2 : 1
                                             border.color: root.popupColor === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
-                                            StyledText { visible: modelData === "custom"; anchors.centerIn: parent; text: "+"; font.pixelSize: 12; color: "red"; font.bold: true }
                                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                                 onClicked: {
-                                                    if (modelData === "custom") { gearPopupColorDialog.open(); return; }
                                                     if (pluginService) pluginService.savePluginData(pluginId, "popupColor", modelData)
                                                 }
                                             }
                                         }
+                                    }
+                                    // Custom color picker
+                                    Rectangle {
+                                        width: 18; height: 18; radius: 4
+                                        color: "white"
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outline, 0.3)
+                                        StyledText { anchors.centerIn: parent; text: "+"; font.pixelSize: 16; color: "red"; font.bold: true }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: gearPopupColorDialog.open() }
                                     }
                                     ColorDialog {
                                         id: gearPopupColorDialog
@@ -3923,6 +4114,7 @@ DesktopPluginComponent {
     DmsFileManagerRenameDialog {
         id: renameDialog
         pluginLanguage: root.pluginLanguage
+        popupColor: root.popupColor
     }
 
     // Create Stack Dialog
@@ -3935,6 +4127,7 @@ DesktopPluginComponent {
     DmsFileManagerInfoDialog {
         id: infoDialog
         pluginLanguage: root.pluginLanguage
+        popupColor: root.popupColor
     }
 
     // Overwrite Confirmation Dialog
@@ -4083,7 +4276,9 @@ DesktopPluginComponent {
 
         contentItem: Rectangle {
             id: folderDropdownContent
-            color: Theme.withAlpha(Theme.surfaceContainer, root.folderDropdownOpacity)
+            // Custom color (empty = theme surface) combined with the SideBar Opacity slider
+            color: root.sidebarColor !== "" ? Qt.alpha(root.sidebarColor, root.folderDropdownOpacity)
+                                            : Theme.withAlpha(Theme.surfaceContainer, root.folderDropdownOpacity)
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -5014,6 +5209,31 @@ DesktopPluginComponent {
         }
     }
 
+    // Paste worker: runs paste.py and streams its progress protocol
+    Process {
+        id: pasteProc
+        stdout: SplitParser {
+            onRead: data => root._handlePasteProgress(data)
+        }
+        stderr: SplitParser {
+            onRead: data => {
+                root._pasteStderr = (root._pasteStderr + data).slice(-400);
+                console.warn("paste.py stderr:", data);
+            }
+        }
+        onExited: function(exitCode, exitStatus) {
+            root._finishPaste(exitCode);
+        }
+    }
+
+    // Keeps the finished-state pill visible for a moment before hiding it
+    Timer {
+        id: pasteDoneTimer
+        interval: 1200
+        repeat: false
+        onTriggered: { root.pasteActive = false; }
+    }
+
     Timer {
         id: rescanTimer
         interval: 400
@@ -5904,5 +6124,120 @@ DesktopPluginComponent {
             }
             root._extractNext(list, idx + 1);
         });
+    }
+
+    // Paste progress pill — floats above the toolbar while paste.py works
+    Rectangle {
+        id: pasteProgressPill
+        visible: root.pasteActive
+        z: 200
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 15 + Theme.spacingM + ((root.showHeader && root.headerPosition === "bottom") ? 26 : 8)
+        width: pillRow.implicitWidth + Theme.spacingL
+        height: 40
+        radius: 20
+        color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
+        border.color: Theme.withAlpha(Theme.outline, 0.25)
+        border.width: 1
+
+        Row {
+            id: pillRow
+            anchors.centerIn: parent
+            spacing: Theme.spacingS
+
+            DankIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: root.pastePhase === "running" ? "sync"
+                    : root.pastePhase === "failed" ? "error"
+                    : root.pastePhase === "cancelled" ? "cancel" : "check_circle"
+                size: 16
+                color: root.pastePhase === "running" ? Theme.primary
+                    : root.pastePhase === "failed" ? "#EF5350"
+                    : root.pastePhase === "cancelled" ? Theme.surfaceText : "#66BB6A"
+
+                RotationAnimation on rotation {
+                    running: root.pasteActive && root.pastePhase === "running"
+                    loops: Animation.Infinite
+                    from: 0
+                    to: 360
+                    duration: 1500
+                }
+            }
+
+            StyledText {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, 220)
+                elide: Text.ElideMiddle
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceText
+                text: {
+                    if (root.pastePhase === "done")
+                        return i18n("Pasted") + " " + root.pasteOkCount + " " + i18n("item(s)");
+                    if (root.pastePhase === "failed")
+                        return i18n("Paste failed") + " (" + root.pasteFailCount + ")";
+                    if (root.pastePhase === "cancelled")
+                        return i18n("Cancelled");
+                    if (root.pasteTotal === 0)
+                        return i18n("Preparing paste...");
+                    return (root._pasteIsMove ? i18n("Moving") : i18n("Copying")) + " " + root.pasteCurrentName;
+                }
+            }
+
+            // Progress bar + percent (only while running with a known total)
+            Item {
+                visible: root.pastePhase === "running" && root.pasteTotal > 0
+                width: 160
+                height: 16
+                anchors.verticalCenter: parent.verticalCenter
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 120
+                    height: 4
+                    radius: 2
+                    color: Theme.withAlpha(Theme.outline, 0.3)
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        radius: 2
+                        width: Math.max(2, parent.width * root.pasteDone / Math.max(1, root.pasteTotal))
+                        color: Theme.primary
+                        Behavior on width { NumberAnimation { duration: 120 } }
+                    }
+                }
+
+                StyledText {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 128
+                    anchors.verticalCenter: parent.verticalCenter
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.surfaceText
+                    text: Math.floor(root.pasteDone / Math.max(1, root.pasteTotal) * 100) + "%"
+                }
+            }
+
+            // Cancel button
+            MouseArea {
+                id: pasteCancelBtn
+                visible: root.pastePhase === "running"
+                width: 22
+                height: 22
+                anchors.verticalCenter: parent.verticalCenter
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: root.cancelPaste()
+
+                DankIcon {
+                    anchors.centerIn: parent
+                    name: "close"
+                    size: 14
+                    color: pasteCancelBtn.containsMouse ? Theme.primary : Theme.surfaceText
+                }
+            }
+        }
     }
 }

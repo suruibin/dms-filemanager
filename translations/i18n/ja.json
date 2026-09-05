@@ -48,7 +48,6 @@
   "Feedback & Support": "フィードバックとサポート",
   "File Copied": "ファイルがコピーされました",
   "File name...": "ファイル名",
-
   "File Type": "ファイルタイプ",
   "Files Only": "ファイルのみ",
   "Float File": "浮動小数点ファイル",
@@ -162,5 +161,13 @@
   "Information": "情報",
   "Extract AppImage Icons": "AppImageアイコンを抽出",
   "Extract icons from AppImage files for display": "ディレクトリ移動時にAppImageアイコンを自動抽出",
-  "参考": "参考"
+  "参考": "参考",
+  "Paste in progress": "貼り付け中",
+  "Pasted": "貼り付け完了",
+  "item(s)": "件",
+  "Paste failed": "貼り付けに失敗しました",
+  "Cancelled": "キャンセルされました",
+  "Preparing paste...": "貼り付けを準備中...",
+  "Moving": "移動中",
+  "Copying": "コピー中"
 }

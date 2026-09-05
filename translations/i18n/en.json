@@ -46,7 +46,6 @@
   "Feedback & Support": "Feedback & Support",
   "File Copied": "File Copied",
   "File name...": "File name...",
-
   "File Type": "File Type",
   "Files Only": "Files Only",
   "Float File": "Float File",
@@ -157,5 +156,13 @@
   "Information": "Information",
   "Extract AppImage Icons": "Extract AppImage Icons",
   "Extract icons from AppImage files for display": "Auto-extract icons from AppImage files when entering a directory",
-  "参考": "Reference"
+  "参考": "Reference",
+  "Paste in progress": "Paste in progress",
+  "Pasted": "Pasted",
+  "item(s)": "item(s)",
+  "Paste failed": "Paste failed",
+  "Cancelled": "Cancelled",
+  "Preparing paste...": "Preparing paste...",
+  "Moving": "Moving",
+  "Copying": "Copying"
 }
