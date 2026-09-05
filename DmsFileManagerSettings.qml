@@ -34,11 +34,12 @@ PluginSettings {
         SectionTitle { 
             text: i18n("Appearance")
             icon: "palette" 
-            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || folderDropdownOpacity.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
+            showReset: backgroundOpacity.isDirty || borderOpacity.isDirty || folderDropdownOpacity.isDirty || popupColor.isDirty || cellSize.isDirty || viewMode.isDirty || headerPosition.isDirty || showHeader.isDirty || showHidden.isDirty || emptyColor.isDirty || folderColor.isDirty
             onResetClicked: {
                 backgroundOpacity.resetToDefault();
                 borderOpacity.resetToDefault();
                 folderDropdownOpacity.resetToDefault();
+                popupColor.resetToDefault();
                 cellSize.resetToDefault();
                 viewMode.resetToDefault();
                 headerPosition.resetToDefault();
@@ -87,6 +88,78 @@ PluginSettings {
             unit: "%"
             leftLabel: "0%"
             rightLabel: "100%"
+        }
+
+        Separator {}
+
+        Item {
+            id: popupColor
+            width: parent.width
+            implicitHeight: 50
+
+            readonly property string value: pluginData?.popupColor ?? ""
+            readonly property bool isDirty: false
+
+            function resetToDefault() {
+                if (pluginService)
+                    pluginService.savePluginData("dmsfilemanager", "popupColor", "");
+            }
+
+            StyledText {
+                text: i18n("Popup Color")
+                font.pixelSize: Theme.fontSizeLarge
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+                anchors.left: parent.left
+                anchors.top: parent.top
+            }
+
+            Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                spacing: 6
+
+                Repeater {
+                    // "" = follow theme surface color, "custom" = color picker
+                    model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#263238", "#1E1E2E", "#14141B", "#000000", "custom"]
+
+                    delegate: Rectangle {
+                        width: 14; height: 14
+                        radius: modelData === "" ? 7 : 2
+                        color: modelData === "" ? Theme.surfaceContainer : (modelData === "custom" ? "white" : modelData)
+                        border.width: popupColor.value === modelData ? 2 : 1
+                        border.color: popupColor.value === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
+
+                        StyledText {
+                            visible: modelData === "custom"
+                            anchors.centerIn: parent
+                            text: "+"
+                            font.pixelSize: 12
+                            color: "red"
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (modelData === "custom") { popupColorDialog.open(); return; }
+                                if (pluginService)
+                                    pluginService.savePluginData("dmsfilemanager", "popupColor", modelData);
+                            }
+                        }
+                    }
+                }
+
+                ColorDialog {
+                    id: popupColorDialog
+                    title: i18n("Popup Color")
+                    selectedColor: popupColor.value === "" ? Theme.surfaceContainer : popupColor.value
+                    onAccepted: {
+                        if (pluginService) pluginService.savePluginData("dmsfilemanager", "popupColor", selectedColor.toString());
+                    }
+                }
+            }
         }
 
         Separator {}

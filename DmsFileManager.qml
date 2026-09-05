@@ -43,6 +43,7 @@ DesktopPluginComponent {
     readonly property real backgroundOpacity: (pluginData.backgroundOpacity ?? 0) / 100
     readonly property real borderOpacity: (pluginData.borderOpacity ?? 100) / 100
     readonly property real folderDropdownOpacity: (pluginData.folderDropdownOpacity ?? 95) / 100
+    property string popupColor: pluginData.popupColor ?? ""
     property bool showHidden: pluginData.showHidden ?? false
     property int cellSize: pluginData.cellSize ?? 94
     readonly property double sizeScale: cellSize / 84.0
@@ -2659,7 +2660,7 @@ DesktopPluginComponent {
                         background: Rectangle { color: "transparent" }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -2860,12 +2861,12 @@ DesktopPluginComponent {
                     background: Rectangle { color: "transparent" }
 
                     contentItem: Rectangle {
-                color: Theme.surfaceContainer
+                color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
                         radius: Theme.cornerRadius
                         border.color: Theme.withAlpha(Theme.outline, 0.15)
                         border.width: 1
 
-                    
+
                         Column {
                             id: settingsColumn
                             anchors.fill: parent
@@ -2979,6 +2980,36 @@ DesktopPluginComponent {
                                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                                 onClicked: { root.folderColor = modelData; if (pluginService) pluginService.savePluginData(pluginId, "folderColor", modelData); settingsDropdown.close() } }
                                         }
+                                    }
+                                }
+                            }
+
+                            // Popup background color (stays open for live preview)
+                            Column { width: parent.width; spacing: 6
+                                StyledText { text: i18n("Popup Color"); font.pixelSize: Theme.fontSizeSmall - 1; color: Theme.surfaceVariantText }
+                                Row { spacing: 5
+                                    Repeater {
+                                        model: ["", "#455A64", "#5D4037", "#37474F", "#2E3A4D", "#263238", "#1E1E2E", "#14141B", "#000000", "custom"]
+                                        delegate: Rectangle {
+                                            width: 14; height: 14
+                                            radius: modelData === "" ? 7 : 2
+                                            color: modelData === "" ? Theme.surfaceContainer : (modelData === "custom" ? "white" : modelData)
+                                            border.width: root.popupColor === modelData ? 2 : 1
+                                            border.color: root.popupColor === modelData ? Theme.surfaceText : Theme.withAlpha(Theme.outline, 0.3)
+                                            StyledText { visible: modelData === "custom"; anchors.centerIn: parent; text: "+"; font.pixelSize: 12; color: "red"; font.bold: true }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (modelData === "custom") { gearPopupColorDialog.open(); return; }
+                                                    if (pluginService) pluginService.savePluginData(pluginId, "popupColor", modelData)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ColorDialog {
+                                        id: gearPopupColorDialog
+                                        title: i18n("Popup Color")
+                                        selectedColor: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
+                                        onAccepted: { if (pluginService) pluginService.savePluginData(pluginId, "popupColor", selectedColor.toString()) }
                                     }
                                 }
                             }
@@ -3520,7 +3551,7 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -3808,7 +3839,7 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -3926,7 +3957,7 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -4135,6 +4166,7 @@ DesktopPluginComponent {
                     model: root.folderDropdownModel
 
                     delegate: Rectangle {
+                        id: dropdownEntryRow
                         width: parent.width
                         height: modelData.value === "separator" ? 10 : 28
                         radius: Theme.cornerRadius - 2
@@ -4252,6 +4284,9 @@ DesktopPluginComponent {
                                     }
                                 } else if (modelData.value === "drives") {
                                     root._rebuildDriveList();
+                                    // Anchor the popup beside the "Drives" row instead of the top
+                                    var mapped = dropdownEntryRow.mapToItem(folderDropdownContent, 0, 0);
+                                    driveListPopup.anchorY = mapped.y;
                                     driveListPopup.open();
                                 } else {
                                     // Default standard folder type
@@ -4423,18 +4458,19 @@ DesktopPluginComponent {
     Popup {
         id: driveListPopup
         parent: folderDropdownContent
+        property real anchorY: 0
         width: 320
         height: Math.min(driveListColumn.implicitHeight + Theme.spacingS * 2, 400)
         padding: 0
         x: folderDropdown.width + 4
-        y: 0
+        y: Math.max(4, Math.min(anchorY, folderDropdownContent.height - height - 8))
         modal: false
         dim: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            // Fully opaque: must stay readable even when folderDropdownOpacity is set low
-            color: Theme.surfaceContainer
+            // Color follows the Popup Color setting (empty = theme default)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -4569,7 +4605,7 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -4654,7 +4690,7 @@ DesktopPluginComponent {
         }
 
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -4739,11 +4775,11 @@ DesktopPluginComponent {
         }
  
         contentItem: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
- 
+
             Column {
                 id: filterDropdownColumn
                 anchors.fill: parent
@@ -5720,7 +5756,7 @@ DesktopPluginComponent {
         closePolicy: Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: Theme.surfaceContainer
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
