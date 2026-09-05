@@ -2093,6 +2093,27 @@ DesktopPluginComponent {
         return size.toFixed(i === 0 ? 0 : 1) + " " + units[i];
     }
 
+    // Compact size for the drive popup: "222G", "1.6T" (no space, no trailing .0)
+    function formatSizeShort(bytes) {
+        if (!bytes || bytes <= 0) return "";
+        const units = ["B", "K", "M", "G", "T"];
+        let i = 0;
+        let size = bytes;
+        while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+        var s = i === 0 ? String(Math.round(size)) : size.toFixed(1);
+        if (s.endsWith(".0")) s = s.slice(0, -2);
+        return s + units[i];
+    }
+
+    // Parse an lsblk SIZE string like "223.57G" / "1.8T" / "512M" into bytes
+    function parseLsblkSize(str) {
+        if (!str) return 0;
+        var m = String(str).trim().match(/^([\d.]+)\s*([KMGT])?$/i);
+        if (!m) return 0;
+        var mult = { k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024, t: 1024 * 1024 * 1024 * 1024 };
+        return Math.round(parseFloat(m[1]) * (mult[(m[2] || "").toLowerCase()] || 1));
+    }
+
     function formatDate(date) {
         if (!date) return "";
         const d = new Date(date);
@@ -4702,6 +4723,11 @@ DesktopPluginComponent {
                     color: driveItemArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.15) : "transparent"
 
                     readonly property var _d: modelData
+                    // "222G / 1.6T" when free space is known, otherwise raw size
+                    readonly property string sizeText:
+                        modelData.avail > 0 && modelData.sizeBytes > 0
+                            ? root.formatSizeShort(modelData.avail) + " / " + root.formatSizeShort(modelData.sizeBytes)
+                            : modelData.size
 
                     // Icon — left side
                     DankIcon {
@@ -4713,23 +4739,23 @@ DesktopPluginComponent {
                         color: modelData.mounted ? Theme.primary : Theme.surfaceVariantText
                     }
 
-                    // Size text — right side
+                    // Free / total size — right side (red when less than 1 GB free)
                     StyledText {
                         id: driveDelSize
                         anchors.right: parent.right
                         anchors.rightMargin: Theme.spacingS
                         anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.size
+                        text: driveDelegateRoot.sizeText
                         font.pixelSize: Theme.fontSizeSmall - 2
-                        color: Theme.surfaceVariantText
-                        visible: modelData.size !== ""
+                        color: modelData.avail > 0 && modelData.avail < 1073741824 ? Theme.error : Theme.surfaceVariantText
+                        visible: driveDelegateRoot.sizeText !== ""
                     }
 
                     // Label + subtitle — middle, filling remaining space
                     Column {
                         anchors.left: driveDelIcon.right
                         anchors.leftMargin: Theme.spacingS
-                        anchors.right: driveDelSize.left
+                        anchors.right: driveDelSize.visible ? driveDelSize.left : parent.right
                         anchors.rightMargin: Theme.spacingS
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 1
@@ -5163,7 +5189,9 @@ DesktopPluginComponent {
                 mounted: de.mounted,
                 icon: de.icon,
                 size: de.size || "",
-                fstype: de.fstype || ""
+                sizeBytes: root.parseLsblkSize(de.size || ""),
+                fstype: de.fstype || "",
+                avail: (de.mounted && de.path && root._driveAvail[de.path]) ? root._driveAvail[de.path] : 0
             });
         }
         root.driveListModel = list;
@@ -5183,6 +5211,28 @@ DesktopPluginComponent {
             root._driveEntries = result;
             // Rebuild dropdown model with latest drive data (mounted + unmounted)
             buildFolderDropdownModel();
+            root._rebuildDriveList();
+            // Fetch available (free) space for mounted mountpoints
+            dfProc.running = true;
+        }
+    }
+
+    // Available-space lookup: mountpoint -> free bytes (populated by dfProc)
+    property var _driveAvail: ({})
+
+    Process {
+        id: dfProc
+        command: ["df", "-B1", "--output=target,avail"]
+        stdout: StdioCollector { id: dfOut }
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0 || dfOut.text.trim() === "") return;
+            var map = {};
+            var lines = dfOut.text.split("\n");
+            for (var i = 1; i < lines.length; i++) { // skip header line
+                var m = lines[i].match(/^(.+)\s+(\d+)\s*$/);
+                if (m) map[m[1].replace(/\s+$/, "")] = parseInt(m[2]); // trim df column padding
+            }
+            root._driveAvail = map;
             root._rebuildDriveList();
         }
     }
