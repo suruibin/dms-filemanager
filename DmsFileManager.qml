@@ -908,36 +908,13 @@ DesktopPluginComponent {
     }
 
     function _executePaste(ops, overwrite) {
-        // batch copy/move: single process for all files
-        let srcs = [];
-        let dests = [];
-        let isCut = ops.length > 0 && ops[0].isCut;
         for (var i = 0; i < ops.length; i++) {
             var op = ops[i];
             if (!overwrite && op.conflict) continue;
-            srcs.push(op.src);
-            dests.push(op.dest);
-        }
-        if (srcs.length === 0) return;
-        // all dest paths share the same parent directory; extract it
-        let commonDest = dests[0].substring(0, dests[0].lastIndexOf('/'));
-        for (let d of dests) {
-            let p = d.substring(0, d.lastIndexOf('/'));
-            if (p !== commonDest) { commonDest = ""; break; }
-        }
-        if (commonDest) {
-            // batch: cp -a src1 src2 ... destDir/
-            let args = isCut ? ["mv"] : ["cp", "-a"];
-            args = args.concat(srcs).concat([commonDest + "/"]);
-            Quickshell.execDetached(args);
-        } else {
-            // fallback: one by one
-            for (var j = 0; j < srcs.length; j++) {
-                if (isCut) {
-                    Quickshell.execDetached(["mv", srcs[j], dests[j]]);
-                } else {
-                    Quickshell.execDetached(["cp", "-a", srcs[j], dests[j]]);
-                }
+            if (op.isCut) {
+                Quickshell.execDetached(["mv", op.src, op.dest]);
+            } else {
+                Quickshell.execDetached(["cp", "-a", op.src, op.dest]);
             }
         }
         root.copiedFilePaths = [];
@@ -1199,10 +1176,12 @@ DesktopPluginComponent {
 
                 if (results.length > 0) {
                     var pos = pathEditor.mapToItem(root, 0, 0);
-                    pathCompletionPopup.x = pos.x;
+                    var popupWidth = Math.max(folderSelectorBtn.width, 180);
+                    // Follow the editor horizontally, clamped inside the widget
+                    pathCompletionPopup.x = Math.max(4, Math.min(pos.x, root.width - popupWidth - 4));
                     // Show above editor since it's at bottom
                     pathCompletionPopup.y = pos.y - Math.min(results.length * 28 + 4, 284);
-                    pathCompletionPopup.width = Math.max(folderSelectorBtn.width, 180);
+                    pathCompletionPopup.width = popupWidth;
                     pathCompletionPopup.open();
                 } else {
                     pathCompletionPopup.close();
@@ -1302,6 +1281,8 @@ DesktopPluginComponent {
         let pinnedFiles = [];
         let unpinnedDirs = [];
         let unpinnedFiles = [];
+        let _pendingDirChecks = [];
+        let _pendingDesktopPaths = [];
 
         // Load stacks in this folder and get list of files in collapsed stacks
         let currentFolderStacks = [];
@@ -1411,21 +1392,10 @@ DesktopPluginComponent {
                     belongingStackId: ""
                 };
 
-                // Async check: empty folders
+                // Collect dir paths for batch empty check
                 if (fIsDir) {
                     let checkPath = root._cleanPath(pathStr);
-                    let safePath = checkPath.replace(/'/g, "'\\''");
-                    Proc.runCommand("emptyCheck-" + Math.random(), ["sh", "-c", "ls -A '" + safePath + "' 2>/dev/null | head -1 | wc -l"], (out, code) => {
-                        if (code === 0) {
-                            let hasContent = parseInt(String(out).trim()) > 0;
-                            for (let k = 0; k < filteredModel.count; k++) {
-                                if (filteredModel.get(k).filePath === pathStr) {
-                                    filteredModel.setProperty(k, "isEmpty", !hasContent);
-                                    break;
-                                }
-                            }
-                        }
-                    });
+                    _pendingDirChecks.push({ path: pathStr, safePath: checkPath.replace(/'/g, "'\\''") });
                 }
                 
                 let expandedStackId = fileToExpandedStackMap[pathStr];
@@ -1437,72 +1407,13 @@ DesktopPluginComponent {
                     expandedStackFilesMap[expandedStackId].push(item);
                     
                     if (isDesktop) {
-                        let safePath = root._cleanPath(pathStr);
-                        Proc.runCommand("parseDesktop-" + Math.random(), ["cat", safePath], (out, code) => {
-                            if (code === 0 && out) {
-                                let aName = "";
-                                let aIcon = "";
-                                let aExec = "";
-                                let lines = out.split('\n');
-                                for (let j = 0; j < lines.length; j++) {
-                                    let l = lines[j].trim();
-                                    if (l.startsWith("Name=") && !aName) aName = l.substring(5).trim();
-                                    else if (l.startsWith("Icon=") && !aIcon) aIcon = l.substring(5).trim();
-                                    else if (l.startsWith("Exec=") && !aExec) aExec = l.substring(5).trim();
-                                }
-                                
-                                let targetIdx = -1;
-                                for (let k = 0; k < filteredModel.count; k++) {
-                                    if (filteredModel.get(k).filePath === pathStr) {
-                                        targetIdx = k;
-                                        break;
-                                    }
-                                }
-                                
-                                if (targetIdx !== -1) {
-                                    filteredModel.setProperty(targetIdx, "appName", aName);
-                                    filteredModel.setProperty(targetIdx, "appIcon", aIcon);
-                                    filteredModel.setProperty(targetIdx, "appExec", aExec);
-                                    filteredModel.setProperty(targetIdx, "displayBaseName", aName);
-                                }
-                            }
-                        });
+                        _pendingDesktopPaths.push(pathStr);
                     }
                     continue; // Skip partitioning to general list
                 }
 
                 if (isDesktop) {
-                    let safePath = root._cleanPath(pathStr);
-                    Proc.runCommand("parseDesktop-" + Math.random(), ["cat", safePath], (out, code) => {
-                        if (code === 0 && out) {
-                            let aName = "";
-                            let aIcon = "";
-                            let aExec = "";
-                            let lines = out.split('\n');
-                            for (let j = 0; j < lines.length; j++) {
-                                let l = lines[j].trim();
-                                if (l.startsWith("Name=") && !aName) aName = l.substring(5).trim();
-                                else if (l.startsWith("Icon=") && !aIcon) aIcon = l.substring(5).trim();
-                                else if (l.startsWith("Exec=") && !aExec) aExec = l.substring(5).trim();
-                            }
-                            
-                            // Find the item index since model might have changed
-                            let targetIdx = -1;
-                            for (let k = 0; k < filteredModel.count; k++) {
-                                if (filteredModel.get(k).filePath === pathStr) {
-                                    targetIdx = k;
-                                    break;
-                                }
-                            }
-                            
-                            if (targetIdx !== -1) {
-                                filteredModel.setProperty(targetIdx, "appName", aName);
-                                filteredModel.setProperty(targetIdx, "appIcon", aIcon);
-                                filteredModel.setProperty(targetIdx, "appExec", aExec);
-                                filteredModel.setProperty(targetIdx, "displayBaseName", aName);
-                            }
-                        }
-                    });
+                    _pendingDesktopPaths.push(pathStr);
                 }
 
                 let isPinned = root.pinnedPaths.indexOf(pathStr) !== -1;
@@ -1589,6 +1500,65 @@ DesktopPluginComponent {
         
         // 6. Unpinned Files
         unpinnedFiles.forEach(function(item) { filteredModel.append(item); });
+
+        // ── Batch empty-folder check (single Proc instead of one per dir) ──
+        if (_pendingDirChecks.length > 0) {
+            let cmds = _pendingDirChecks.map(d => "ls -A '" + d.safePath + "' 2>/dev/null | head -1 | wc -l").join("; ");
+            Proc.runCommand("batchEmpty-" + Math.random(), ["sh", "-c", cmds], (out, code) => {
+                if (code === 0 && out) {
+                    let results = String(out).trim().split("\n");
+                    for (let k = 0; k < results.length && k < _pendingDirChecks.length; k++) {
+                        let hasContent = parseInt(results[k].trim()) > 0;
+                        let dirPath = _pendingDirChecks[k].path;
+                        for (let m = 0; m < filteredModel.count; m++) {
+                            if (filteredModel.get(m).filePath === dirPath) {
+                                filteredModel.setProperty(m, "isEmpty", !hasContent);
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ── Batch .desktop parsing (single Proc instead of one per file) ──
+        if (_pendingDesktopPaths.length > 0) {
+            let cmds = [];
+            for (let di = 0; di < _pendingDesktopPaths.length; di++) {
+                let safe = _pendingDesktopPaths[di].replace(/'/g, "'\\''");
+                cmds.push("echo '===DESKTOP" + di + "===' && cat '" + safe + "'");
+            }
+            Proc.runCommand("batchDesktop-" + Math.random(), ["sh", "-c", cmds.join("; ")], (out, code) => {
+                if (code === 0 && out && String(out).trim() !== "") {
+                    let raw = String(out);
+                    for (let di = 0; di < _pendingDesktopPaths.length; di++) {
+                        let marker = "===DESKTOP" + di + "===";
+                        let start = raw.indexOf(marker);
+                        let end = raw.indexOf("===DESKTOP", start + 1);
+                        let content = end > start ? raw.substring(start + marker.length, end) : raw.substring(start + marker.length);
+                        let aName = "", aIcon = "", aExec = "";
+                        for (let l of content.split("\n")) {
+                            let t = l.trim();
+                            if (t.startsWith("Name=") && !aName) aName = t.substring(5).trim();
+                            else if (t.startsWith("Icon=") && !aIcon) aIcon = t.substring(5).trim();
+                            else if (t.startsWith("Exec=") && !aExec) aExec = t.substring(5).trim();
+                        }
+                        if (aName) {
+                            let p = _pendingDesktopPaths[di];
+                            for (let m = 0; m < filteredModel.count; m++) {
+                                if (filteredModel.get(m).filePath === p) {
+                                    filteredModel.setProperty(m, "appName", aName);
+                                    filteredModel.setProperty(m, "appIcon", aIcon);
+                                    filteredModel.setProperty(m, "appExec", aExec);
+                                    filteredModel.setProperty(m, "displayBaseName", aName);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // ── AppImage icon matching via ~/.config/DankMaterialShell/appicons/ ──
         if (root.extractAppIcons) {
@@ -1691,7 +1661,14 @@ DesktopPluginComponent {
         updateFilteredModel();
     }
 
-    onSearchPatternChanged: updateFilteredModel()
+    // ── Search debounce timer ──────────────────────────────────────────────
+    property Timer _searchDebounceTimer: Timer {
+        interval: 200
+        repeat: false
+        onTriggered: updateFilteredModel()
+    }
+
+    onSearchPatternChanged: { _searchDebounceTimer.restart(); }
  
     // Basic Filtering Properties
     property string filterType: "all"
@@ -2247,7 +2224,11 @@ DesktopPluginComponent {
                     }
                 ]
 
-                width: root.folderPathEditMode ? 200 : folderRow.implicitWidth
+                // Edit mode: expand from the home icon rightward up to the
+                // right-side control cluster, giving long paths room to edit
+                width: root.folderPathEditMode
+                    ? Math.max(200, headerControls.x - x - Theme.spacingS)
+                    : folderRow.implicitWidth
                 height: 20
                 z: 1
                 hoverEnabled: true
@@ -2260,7 +2241,11 @@ DesktopPluginComponent {
                     spacing: Theme.spacingXS
                     visible: !root.folderPathEditMode
                     DankIcon { name: "folder_open"; size: 16; color: folderSelectorBtn.containsMouse ? Theme.primary : Theme.surfaceText; opacity: folderSelectorBtn.containsMouse ? 1.0 : 0.8; anchors.verticalCenter: parent.verticalCenter }
-                    StyledText { text: root.showFullPath ? root.targetFolderUrl.replace("file://", "") : root.folderDisplayName; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: folderSelectorBtn.containsMouse ? Theme.primary : Theme.surfaceText; opacity: folderSelectorBtn.containsMouse ? 1.0 : 0.8; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideMiddle }
+                    StyledText {
+                        text: root.showFullPath ? root.targetFolderUrl.replace("file://", "") : root.folderDisplayName; font.pixelSize: Theme.fontSizeSmall; font.bold: true; color: folderSelectorBtn.containsMouse ? Theme.primary : Theme.surfaceText; opacity: folderSelectorBtn.containsMouse ? 1.0 : 0.8; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideMiddle
+                        // Cap the label so the file status after it isn't pushed to the far right
+                        width: Math.min(implicitWidth, Math.max(120, root.width * 0.4))
+                    }
                     DankIcon { name: "arrow_drop_down"; size: 12; color: folderSelectorBtn.containsMouse ? Theme.primary : Theme.surfaceText; opacity: folderSelectorBtn.containsMouse ? 1.0 : 0.6; anchors.verticalCenter: parent.verticalCenter }
                 }
 
@@ -2875,7 +2860,7 @@ DesktopPluginComponent {
                     background: Rectangle { color: "transparent" }
 
                     contentItem: Rectangle {
-                color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+                color: Theme.surfaceContainer
                         radius: Theme.cornerRadius
                         border.color: Theme.withAlpha(Theme.outline, 0.15)
                         border.width: 1
@@ -3310,6 +3295,21 @@ DesktopPluginComponent {
                     }
                 }
 
+                // While path editing: any click in the file area exits edit mode.
+                // This overlay sits above the views (which are Flickables that
+                // consume left-button presses, so background handlers never fire).
+                MouseArea {
+                    anchors.fill: parent
+                    z: 100
+                    visible: root.folderPathEditMode
+                    enabled: root.folderPathEditMode
+                    onClicked: {
+                        pathCompletionPopup.close();
+                        _pathCompletions = [];
+                        root.folderPathEditMode = false;
+                    }
+                }
+
                 // Background area for middle-click on empty space → new file dialog
                 MouseArea {
                     anchors.fill: parent
@@ -3504,6 +3504,16 @@ DesktopPluginComponent {
         property string currentPath: ""
         property string currentName: ""
         property bool currentIsDir: false
+        // key of the menu item ("filepath"/"dirpath") currently showing its green check
+        property string _checkItem: ""
+
+        Timer {
+            id: quickMenuCheckTimer
+            interval: 900
+            onTriggered: quickMenu.close()
+        }
+
+        onOpened: _checkItem = ""
 
         background: Rectangle {
             color: "transparent"
@@ -3603,26 +3613,26 @@ DesktopPluginComponent {
                         {
                             text: i18n("Copy File Path"),
                             icon: "content_copy",
+                            key: "filepath",
                             visible: true,
                             action: function() {
-                                quickMenu.close();
                                 const joinedPaths = root.selectedFilePaths.join("\n");
                                 Quickshell.execDetached(["dms", "cl", "copy", joinedPaths]);
-                                
-                                let label = root.selectedFilePaths.length > 1
-                                    ? i18n("Copied %1 paths").arg(root.selectedFilePaths.length)
-                                    : i18n("Copied to Clipboard") + ": " + quickMenu.currentName;
-                                ToastService.showToast(label, ToastService.levelInfo);
+                                // Stay open and show a green check, then auto-close
+                                quickMenu._checkItem = "filepath";
+                                quickMenuCheckTimer.restart();
                             }
                         },
                         {
                             text: i18n("Copy Dir Path"),
                             icon: "folder_copy",
+                            key: "dirpath",
                             visible: true,
                             action: function() {
-                                quickMenu.close();
                                 let dirPath = root._cleanPath(String(root.targetFolderUrl));
                                 Quickshell.execDetached(["dms", "cl", "copy", dirPath]);
+                                quickMenu._checkItem = "dirpath";
+                                quickMenuCheckTimer.restart();
                             }
                         },
                         {
@@ -3755,6 +3765,15 @@ DesktopPluginComponent {
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
                                 visible: !isSeparator && parent.parent.itemVisible
+                            }
+
+                            // Green check feedback for copy-path actions
+                            DankIcon {
+                                name: "check_circle"
+                                size: 14
+                                color: Theme.success
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: !isSeparator && quickMenu._checkItem === modelData.key
                             }
                         }
 
@@ -4039,17 +4058,50 @@ DesktopPluginComponent {
             border.width: 1
 
             Flickable {
-                id: folderDropdownFlick
-                anchors.fill: parent
-                contentHeight: folderDropdownColumn.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
+                    id: folderDropdownFlick
+                    anchors.fill: parent
+                    contentHeight: folderDropdownColumn.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    onMovementStarted: sidebarWheelAnim.stop()
 
-                ScrollBar.vertical: ScrollBar { 
-                    policy: ScrollBar.AlwaysOn
+                    // Smooth wheel scrolling: the native Flickable wheel step is
+                    // jumpy, so intercept the wheel and animate contentY instead.
+                    NumberAnimation {
+                        id: sidebarWheelAnim
+                        target: folderDropdownFlick
+                        property: "contentY"
+                        duration: 160
+                        easing.type: Easing.OutCubic
+                    }
+                    WheelHandler {
+                        orientation: Qt.Vertical
+                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                        onWheel: ev => {
+                            let delta = ev.pixelDelta.y !== 0
+                                ? ev.pixelDelta.y
+                                : ev.angleDelta.y * 4.0;
+                            let max = Math.max(0, folderDropdownFlick.contentHeight - folderDropdownFlick.height);
+                            let target = Math.max(0, Math.min(max, folderDropdownFlick.contentY - delta));
+                            sidebarWheelAnim.to = target;
+                            sidebarWheelAnim.restart();
+                            ev.accepted = true;
+                        }
+                    }
+
+                ScrollBar.vertical: ScrollBar {
+                    // Track hidden: an always-on track read as a dark line at
+                    // the sidebar/content boundary. Show thumb only when needed.
+                    policy: ScrollBar.AsNeeded
                     width: 4
                     topPadding: 8
                     bottomPadding: 8
+                    background: Rectangle { color: "transparent" }
+                    contentItem: Rectangle {
+                        implicitWidth: 4
+                        radius: 2
+                        color: Theme.withAlpha(Theme.outline, 0.35)
+                    }
                 }
 
                 Column {
@@ -4381,7 +4433,8 @@ DesktopPluginComponent {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, root.folderDropdownOpacity)
+            // Fully opaque: must stay readable even when folderDropdownOpacity is set low
+            color: Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
@@ -5667,7 +5720,7 @@ DesktopPluginComponent {
         closePolicy: Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+            color: Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.15)
             border.width: 1
