@@ -10,19 +10,23 @@ import "../dms-common"
 
 Popup {
     id: createAppDialog
-    width: 380
-    height: 520
+    // Fit within the widget window with an 8px margin so rounded corners
+    // never get clipped by the window bounds.
+    width: parent ? Math.min(300, parent.width - 16) : 300
+    height: parent ? Math.min(520, parent.height - 16) : 520
     padding: 0
     modal: true
     dim: true
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    x: parent ? Math.round((parent.width - width) / 2) : 0
-    y: parent ? Math.round((parent.height - height) / 2) : 0
+    x: parent ? Math.max(8, Math.round((parent.width - width) / 2)) : 0
+    y: parent ? Math.max(8, Math.round((parent.height - height) / 2)) : 0
 
     property string targetFolderUrl: ""
     property var allApps: []
+    // Custom popup background color from plugin settings ("" = theme default)
+    property string popupColor: ""
 
     // ── Plugin I18n ──────────────────────────────────────────────────────────
     property var _pluginFlatTranslations: ({})
@@ -128,8 +132,9 @@ Popup {
     }
 
     contentItem: Rectangle {
-        color: Theme.surfaceContainer
+        color: createAppDialog.popupColor !== "" ? createAppDialog.popupColor : Theme.surfaceContainer
         radius: Theme.cornerRadius
+        clip: true
         border.color: Theme.withAlpha(Theme.outline, 0.15)
         border.width: 1
 

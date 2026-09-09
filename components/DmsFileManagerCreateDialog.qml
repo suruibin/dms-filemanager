@@ -26,6 +26,8 @@ Popup {
     property string targetFolderUrl: ""
     property bool isFolder: true
     property var inputField: null
+    // Custom popup background color from plugin settings ("" = theme default)
+    property string popupColor: ""
 
     // ── Plugin I18n ──────────────────────────────────────────────────────────
     property var _pluginFlatTranslations: ({})
@@ -87,7 +89,7 @@ Popup {
     }
 
     contentItem: Rectangle {
-        color: Theme.withAlpha(Theme.surfaceContainer, 0.95)
+        color: createDialog.popupColor !== "" ? createDialog.popupColor : Theme.withAlpha(Theme.surfaceContainer, 0.95)
         radius: Theme.cornerRadius
         border.color: Theme.withAlpha(Theme.outline, 0.15)
         border.width: 1

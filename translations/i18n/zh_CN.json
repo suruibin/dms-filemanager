@@ -6,6 +6,9 @@
   "App name and Command are required": "应用名称和命令为必填项",
   "App name...": "应用名称...",
   "Appearance": "外貌",
+  "Settings": "设置",
+  "Popup Color": "弹窗颜色",
+  "SideBar Color": "侧边栏颜色",
   "Audio & Video": "音频和视频",
   "Background Opacity": "背景不透明度",
   "Bg Opacity": "背景不透明度",
@@ -170,5 +173,6 @@
   "Cancelled": "已取消",
   "Preparing paste...": "正在准备粘贴...",
   "Moving": "正在移动",
-  "Copying": "正在复制"
+  "Copying": "正在复制",
+  "lines": "行"
 }

@@ -12,6 +12,7 @@ Item {
     property string defaultValue: ""
     property string value: defaultValue
     property bool isInitialized: false
+    property bool openUpwards: false
 
     width: parent.width
     implicitHeight: layoutColumn.implicitHeight
@@ -173,6 +174,7 @@ Item {
             id: dropdown
             width: parent.width
             compactMode: true
+            openUpwards: root.openUpwards
             currentValue: root.valueToLabel[root.value] || root.value
             options: root.optionLabels
             onValueChanged: newValue => {

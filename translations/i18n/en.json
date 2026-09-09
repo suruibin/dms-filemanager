@@ -6,6 +6,9 @@
   "App name and Command are required": "App name and Command are required",
   "App name...": "App name...",
   "Appearance": "Appearance",
+  "Settings": "Settings",
+  "Popup Color": "Popup Color",
+  "SideBar Color": "SideBar Color",
   "Audio & Video": "Audio & Video",
   "Background Opacity": "Background Opacity",
   "Bg Opacity": "Bg Opacity",
@@ -164,5 +167,6 @@
   "Cancelled": "Cancelled",
   "Preparing paste...": "Preparing paste...",
   "Moving": "Moving",
-  "Copying": "Copying"
+  "Copying": "Copying",
+  "lines": "lines"
 }

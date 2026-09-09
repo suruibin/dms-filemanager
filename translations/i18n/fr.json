@@ -6,6 +6,9 @@
   "App name and Command are required": "Le nom de l'application et la commande sont obligatoires",
   "App name...": "Nom de l’application",
   "Appearance": "Apparence",
+  "Settings": "Paramètres",
+  "Popup Color": "Couleur de la fenêtre contextuelle",
+  "SideBar Color": "Couleur de la barre latérale",
   "Audio & Video": "Audio & vidéo",
   "Background Opacity": "Opacité de l'arrière-plan",
   "Bg Opacity": "BG Opacity (Opacité de l'arrière-plan)",
@@ -169,5 +172,6 @@
   "Cancelled": "Annulé",
   "Preparing paste...": "Préparation du collage...",
   "Moving": "Déplacement",
-  "Copying": "Copie"
+  "Copying": "Copie",
+  "lines": "lignes"
 }

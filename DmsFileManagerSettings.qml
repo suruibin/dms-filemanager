@@ -496,6 +496,7 @@ PluginSettings {
         SelectionSettingPlus {
             settingKey: "pluginLanguage"
             label: i18n("Language")
+            openUpwards: true
             defaultValue: "en"
             options: [
                 { label: i18n("System Default"), value: "system" },

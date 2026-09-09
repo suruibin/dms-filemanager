@@ -6,6 +6,9 @@
   "App name and Command are required": "앱 이름과 명령은 필수입니다",
   "App name...": "앱명칭",
   "Appearance": "모습",
+  "Settings": "설정",
+  "Popup Color": "팝업 색상",
+  "SideBar Color": "사이드바 색상",
   "Audio & Video": "오디오 / 비디오",
   "Background Opacity": "배경 불투명도",
   "Bg Opacity": "Bg 불투명도",
@@ -169,5 +172,6 @@
   "Cancelled": "취소됨",
   "Preparing paste...": "붙여넣기 준비 중...",
   "Moving": "이동 중",
-  "Copying": "복사 중"
+  "Copying": "복사 중",
+  "lines": "줄"
 }

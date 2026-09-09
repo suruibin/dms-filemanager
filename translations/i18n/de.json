@@ -6,6 +6,9 @@
   "App name and Command are required": "App-Name und Befehl sind erforderlich",
   "App name...": "App-Name",
   "Appearance": "Aussehen",
+  "Settings": "Einstellungen",
+  "Popup Color": "Popup-Farbe",
+  "SideBar Color": "Seitenleisten-Farbe",
   "Audio & Video": "Audio",
   "Background Opacity": "Hintergrundopazität",
   "Bg Opacity": "Hintergrund-Deckkraft",
@@ -169,5 +172,6 @@
   "Cancelled": "Abgebrochen",
   "Preparing paste...": "Einfügen wird vorbereitet...",
   "Moving": "Wird verschoben",
-  "Copying": "Wird kopiert"
+  "Copying": "Wird kopiert",
+  "lines": "Zeilen"
 }

@@ -486,6 +486,18 @@ DesktopPluginComponent {
         }
     }
     Shortcut {
+        sequence: StandardKey.Delete
+        onActivated: {
+            if (root.selectedFilePaths.length > 0) {
+                var paths = root.selectedFilePaths.slice();
+                root.clearSelection();
+                for (var i = 0; i < paths.length; i++) {
+                    Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
+                }
+            }
+        }
+    }
+    Shortcut {
         sequence: StandardKey.SelectAll
         onActivated: {
             var arr = [];
@@ -1303,9 +1315,12 @@ DesktopPluginComponent {
 
                 if (results.length > 0) {
                     var pos = pathEditor.mapToItem(root, 0, 0);
-                    var popupWidth = Math.max(folderSelectorBtn.width, 180);
+                    // Never extend rightward past the bottom-right icon
+                    // cluster (headerControls) — cap width and x accordingly.
+                    var maxRight = headerControls.x - Theme.spacingS;
+                    var popupWidth = Math.min(Math.max(folderSelectorBtn.width, 180), Math.max(180, maxRight - 4));
                     // Follow the editor horizontally, clamped inside the widget
-                    pathCompletionPopup.x = Math.max(4, Math.min(pos.x, root.width - popupWidth - 4));
+                    pathCompletionPopup.x = Math.max(4, Math.min(pos.x, maxRight - popupWidth));
                     // Show above editor since it's at bottom
                     pathCompletionPopup.y = pos.y - Math.min(results.length * 28 + 4, 284);
                     pathCompletionPopup.width = popupWidth;
@@ -2518,10 +2533,12 @@ DesktopPluginComponent {
                     spacing: Theme.spacingS
 
                     // File Status
+                    // Hidden while the path editor is expanded — the editor
+                    // pushes this row right, overlapping the corner icons.
                     MouseArea {
                         id: fileStatusBtn
                         height: parent.height; width: fileStatusRow.implicitWidth
-                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor; visible: folderModel.count > 0
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor; visible: folderModel.count > 0 && !root.folderPathEditMode
                         onClicked: mouse => {
                             if (quickMenu.visible) { quickMenu.close(); return; }
                             if (root.selectedFilePaths.length === 0) return;
@@ -2936,35 +2953,6 @@ DesktopPluginComponent {
                 }
             }
 
-            // Desktop Widgets button (always visible at bottom)
-            Item {
-                id: desktopWidgetsBox
-                anchors.right: settingsBox.left
-                anchors.rightMargin: Theme.spacingS
-                anchors.bottom: parent.bottom
-                width: 20
-                height: 24
-                z: 10
-                opacity: root.showHeader ? 1.0 : (dwBtn.containsMouse ? 1.0 : 0.05)
-                Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
-
-                MouseArea {
-                    id: dwBtn
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: PopoutService.openSettingsWithTab("desktop_widgets")
-
-                    DankIcon {
-                        anchors.centerIn: parent
-                        name: "widgets"
-                        size: 16
-                        color: dwBtn.containsMouse ? Theme.primary : Theme.surfaceText
-                        opacity: dwBtn.containsMouse ? 1.0 : 0.7
-                    }
-                }
-            }
-
             // Settings button (always visible at bottom-right)
             Item {
                 id: settingsBox
@@ -2997,7 +2985,7 @@ DesktopPluginComponent {
                     id: settingsDropdown
                     parent: settingsBtn
                     width: 240
-                    height: Math.min(500, settingsColumn.implicitHeight + Theme.spacingM * 2)
+                    height: Math.min(640, settingsColumn.implicitHeight + Theme.spacingM * 2)
                     padding: 0
                     modal: true
                     dim: false
@@ -3020,11 +3008,44 @@ DesktopPluginComponent {
                             anchors.margins: Theme.spacingM
                             spacing: Theme.spacingS
 
-                            StyledText {
-                                text: i18n("Appearance")
-                                font.pixelSize: Theme.fontSizeSmall
-                                font.bold: true
-                                color: Theme.surfaceText
+                            // Top row: Desktop Widgets shortcut (left) + centered title
+                            Item {
+                                width: parent.width
+                                height: 16
+
+                                Item {
+                                    width: 16
+                                    height: 16
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+
+                                    MouseArea {
+                                        id: dwPopupShortcut
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            settingsDropdown.close();
+                                            PopoutService.openSettingsWithTab("desktop_widgets");
+                                        }
+
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: "widgets"
+                                            size: 13
+                                            color: dwPopupShortcut.containsMouse ? Theme.primary : Theme.surfaceText
+                                            opacity: dwPopupShortcut.containsMouse ? 1.0 : 0.7
+                                        }
+                                    }
+                                }
+
+                                StyledText {
+                                    text: i18n("Settings")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: true
+                                    color: Theme.surfaceText
+                                    anchors.centerIn: parent
+                                }
                             }
 
                             // Header: show toggle + position buttons (single row)
@@ -3309,7 +3330,7 @@ DesktopPluginComponent {
                                     // Dropdown list
                                     Rectangle {
                                         width: parent.width
-                                        height: langSection.langListOpen ? Math.min(200, langListView.implicitHeight + 4) : 0
+                                        height: langSection.langListOpen ? Math.min(208, langListView.implicitHeight + 4) : 0
                                         radius: 4
                                         color: Theme.withAlpha(Theme.surfaceContainer, 0.98)
                                         border.color: Theme.withAlpha(Theme.outline, 0.15)
@@ -3332,7 +3353,7 @@ DesktopPluginComponent {
 
                                                     delegate: Rectangle {
                                                         width: parent.width
-                height: 20
+                                                        height: 20
                                                         radius: 2
                                                         color: {
                                                             if (root.pluginLanguage === modelData.code)
@@ -3362,19 +3383,7 @@ DesktopPluginComponent {
                                                                 if (pluginService)
                                                                     pluginService.savePluginData(pluginId, "pluginLanguage", modelData.code);
                                                                 langSection.langListOpen = false;
-    }
-    Shortcut {
-        sequence: StandardKey.Delete
-        onActivated: {
-            if (root.selectedFilePaths.length > 0) {
-                var paths = root.selectedFilePaths.slice();
-                root.clearSelection();
-                for (var i = 0; i < paths.length; i++) {
-                    Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
-                }
-            }
-        }
-    }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -4261,6 +4270,7 @@ DesktopPluginComponent {
         id: createDialog
         targetFolderUrl: root.targetFolderUrl
         pluginLanguage: root.pluginLanguage
+        popupColor: root.popupColor
     }
 
     // Create App Dialog
@@ -4268,6 +4278,7 @@ DesktopPluginComponent {
         id: createAppDialog
         targetFolderUrl: root.targetFolderUrl
         pluginLanguage: root.pluginLanguage
+        popupColor: root.popupColor
     }
 
     property bool showFullPath: false
@@ -5385,11 +5396,17 @@ DesktopPluginComponent {
             if (isText) {
                 // Ensure text loads even when onFilePathChanged didn't fire
                 // because filePath was set to the same value (close+reopen
-                // of the same file without navigating elsewhere).
-                if (!_textContent && !_textLoading) {
+                // of the same file without navigating elsewhere). Assigning
+                // an unchanged path does NOT retrigger FileView, so use
+                // reload() in that case.
+                if (!_textLoading) {
                     _textLoading = true;
-                    textFileLoader.path = "file://" + filePath;
                     textLoadTimer.restart();
+                    var p = "file://" + filePath;
+                    if (textFileLoader.path === p)
+                        textFileLoader.reload();
+                    else
+                        textFileLoader.path = p;
                 }
             }
         }
@@ -5411,6 +5428,7 @@ DesktopPluginComponent {
         property string fileExt: fileName.split(".").pop().toLowerCase() || ""
         property string _textContent: ""
         property bool _textLoading: false
+        property var _fileMeta: null
         property int _currentIndex: -1
         property bool _wheelLocked: false
         property int _selectedSubTrack: -1
@@ -5484,6 +5502,32 @@ DesktopPluginComponent {
         onFilePathChanged: {
             _textContent = "";
             _textLoading = false;
+            // Size comes from the model item; mtime is fetched via stat —
+            // FolderListModel's fileModified is UTC-shifted and displays a
+            // wrong local time (same reason InfoDialog shells out to stat).
+            var openedPath = filePath;
+            _fileMeta = null;
+            if (_currentIndex >= 0 && _currentIndex < filteredModel.count) {
+                var metaItem = filteredModel.get(_currentIndex);
+                if (metaItem && metaItem.filePath === filePath)
+                    _fileMeta = { size: metaItem.fileSize || 0, modified: null };
+            }
+            if (filePath) {
+                Proc.runCommand("preview-mtime-" + Math.random(),
+                                ["stat", "-c", "%Y", filePath],
+                                function(output, exitCode) {
+                                    if (exitCode !== 0 || previewPopup.filePath !== openedPath)
+                                        return;
+                                    var secs = parseInt(String(output).trim());
+                                    if (isNaN(secs))
+                                        return;
+                                    var fm = previewPopup._fileMeta;
+                                    previewPopup._fileMeta = {
+                                        size: fm ? fm.size : 0,
+                                        modified: new Date(secs * 1000)
+                                    };
+                                });
+            }
             if (isText) {
                 _textLoading = true;
                 textFileLoader.path = "file://" + filePath;
@@ -5543,7 +5587,7 @@ DesktopPluginComponent {
         readonly property bool isVideo: videoExts.indexOf(fileExt) !== -1
 
         background: Rectangle {
-            color: Theme.surfaceContainer
+            color: root.popupColor !== "" ? root.popupColor : Theme.surfaceContainer
             radius: Theme.cornerRadius
             border.color: Theme.withAlpha(Theme.outline, 0.2)
             border.width: 1
@@ -5777,26 +5821,129 @@ DesktopPluginComponent {
                 visible: active
                 anchors.fill: parent
                 anchors.margins: Theme.spacingM
-                sourceComponent: ScrollView {
+                anchors.topMargin: 18
+                sourceComponent: Flickable {
+                    id: textFlick
                     anchors.fill: parent
                     clip: true
+                    contentWidth: width
+                    contentHeight: textPreviewArea.height
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    property var gutterModel: []
+                    property real gutterWidth: 0
+
+                    // Recompute gutter positions: one y per logical line from
+                    // positionToRectangle, so wrapped lines stay aligned. The
+                    // gutter width adapts to the line-count digit count.
+                    function _updateGutter() {
+                        var t = textPreviewArea.text;
+                        if (!t) { gutterModel = []; gutterWidth = 0; return; }
+                        var lines = t.split("\n");
+                        if (lines.length > 8000) { gutterModel = []; gutterWidth = 0; return; }
+                        var digits = String(lines.length).length;
+                        gutterWidth = Math.max(12, digits * 7 + 2);
+                        var ys = new Array(lines.length);
+                        var pos = 0;
+                        for (var i = 0; i < lines.length; i++) {
+                            ys[i] = textPreviewArea.positionToRectangle(pos).y;
+                            pos += lines[i].length + 1;
+                        }
+                        gutterModel = ys;
+                    }
+
+                    // Line-number gutter — scrolls with the content.
+                    Item {
+                        id: gutter
+                        width: textFlick.gutterWidth
+                        visible: textFlick.gutterWidth > 0
+
+                        Repeater {
+                            model: textFlick.gutterModel
+
+                            delegate: Text {
+                                required property var modelData
+                                required property int index
+                                x: 0
+                                y: modelData
+                                width: parent.width
+                                text: index + 1
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: Theme.withAlpha(Theme.surfaceText, 0.45)
+                                horizontalAlignment: Text.AlignRight
+                            }
+                        }
+                    }
+
+                    // Focus border at viewport level (TextArea is now full
+                    // content height, so its own background would stretch).
+                    Rectangle {
+                        anchors.fill: parent
+                        z: 2
+                        color: "transparent"
+                        border.color: textPreviewArea.activeFocus ? Theme.withAlpha(Theme.surfaceText, 0.3) : "transparent"
+                        border.width: 1
+                        radius: 4
+                    }
 
                     TextArea {
                         id: textPreviewArea
+                        width: textFlick.width
+                        height: Math.max(implicitHeight, textFlick.height)
+                        leftPadding: textFlick.gutterWidth > 0 ? textFlick.gutterWidth + 4 : 6
                         font.pixelSize: Theme.fontSizeSmall + 1
                         color: Theme.surfaceText
                         selectionColor: Qt.rgba(0, 0.7, 0, 0.35)
                         selectedTextColor: Theme.surfaceText
+                        background: null
                         text: previewPopup._textContent || ""
                         placeholderText: previewPopup._textLoading ? i18n("Loading\u2026") : ""
                         placeholderTextColor: Theme.surfaceVariantText
                         wrapMode: TextEdit.Wrap
-                        onTextChanged: previewPopup._textContent = text
-                        background: Rectangle {
-                            color: "transparent"
-                            border.color: textPreviewArea.activeFocus ? Theme.withAlpha(Theme.surfaceText, 0.3) : "transparent"
-                            border.width: 1
+                        onTextChanged: {
+                            previewPopup._textContent = text;
+                            textFlick._updateGutter();
+                        }
+
+                        // Fast wheel scrolling: TextArea scrolls internally with
+                        // no exposed contentY, so size it to its full content and
+                        // let the Flickable scroll instead — intercepted here with
+                        // an animated contentY (sidebar pattern, x4.0 per notch).
+                        NumberAnimation {
+                            id: textWheelAnim
+                            target: textFlick
+                            property: "contentY"
+                            duration: 140
+                            easing.type: Easing.OutCubic
+                        }
+                        WheelHandler {
+                            orientation: Qt.Vertical
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: ev => {
+                                let delta = ev.pixelDelta.y !== 0
+                                    ? ev.pixelDelta.y * 3.0
+                                    : ev.angleDelta.y * 4.0;
+                                let max = Math.max(0, textFlick.contentHeight - textFlick.height);
+                                let target = Math.max(0, Math.min(max, textFlick.contentY - delta));
+                                textWheelAnim.to = target;
+                                textWheelAnim.restart();
+                                ev.accepted = true;
+                            }
+                        }
+                    }
+
+                    ScrollBar.vertical: ScrollBar {
+                        // Always visible while content overflows; hidden when
+                        // the text fits (AsNeeded only shows on interaction).
+                        policy: textFlick.contentHeight > textFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        width: 8
+                        topPadding: 8
+                        bottomPadding: 8
+                        background: Rectangle { color: "transparent" }
+                        contentItem: Rectangle {
+                            implicitWidth: 8
                             radius: 4
+                            color: Theme.withAlpha(Theme.outline, 0.35)
                         }
                     }
                 }
@@ -5903,27 +6050,57 @@ DesktopPluginComponent {
                 anchors.centerIn: parent
             }
 
-            // Bottom bar: filename left, save hint right
+            // Top-center filename label
+            StyledText {
+                anchors.top: parent.top
+                anchors.topMargin: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(implicitWidth, parent.width - 120)
+                text: previewPopup.fileName
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                color: Theme.primary
+                elide: Text.ElideRight
+                maximumLineCount: 1
+                horizontalAlignment: Text.AlignHCenter
+                opacity: previewPopup.isVideo ? (videoMA.containsMouse ? 1.0 : 0.0)
+                       : (previewPopup.isImage ? (previewPopup._imageNameVisible ? 1.0 : 0.0) : 1.0)
+                Behavior on opacity { NumberAnimation { duration: 300 } }
+            }
+
+            // Bottom bar: right-side controls (save hint / slideshow / time)
             Item {
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.spacingM
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spacingM
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 6
+                anchors.bottomMargin: 0
                 height: 20
                 opacity: previewPopup.isVideo ? (videoMA.containsMouse ? 1.0 : 0.0)
                        : (previewPopup.isImage ? (previewPopup._imageNameVisible ? 1.0 : 0.0) : 1.0)
                 Behavior on opacity { NumberAnimation { duration: 300 } }
 
+                // Text status row (bottom-right): line count, size, mtime
                 StyledText {
-                    anchors.left: parent.left
-                    anchors.right: previewPopup.isVideo ? timeRow.left
-                                : (previewPopup.isImage ? slideshowControls.left : saveHint.left)
-                    text: previewPopup.fileName
-                    font.pixelSize: Theme.fontSizeSmall + 2
-                    font.bold: true
-                    color: Theme.primary
+                    id: textStatusRow
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: previewPopup.isText
+                    text: {
+                        var lines = previewPopup._textContent
+                                    ? previewPopup._textContent.split("\n").length : 0;
+                        var parts = [];
+                        var m = previewPopup._fileMeta;
+                        if (m && m.modified)
+                            parts.push(Qt.formatDateTime(new Date(m.modified), "yyyy-MM-dd HH:mm"));
+                        parts.push(lines + " " + i18n("lines"));
+                        if (m && m.size > 0)
+                            parts.push(root.formatFileSize(m.size));
+                        return parts.join("  ·  ");
+                    }
+                    font.pixelSize: Theme.fontSizeSmall - 1
+                    color: Theme.surfaceVariantText
                     elide: Text.ElideRight
                     maximumLineCount: 1
                 }
@@ -5996,16 +6173,6 @@ DesktopPluginComponent {
                     StyledText { text: previewPopup._formatTime(mediaPlayer.position); font.pixelSize: Theme.fontSizeSmall-1; color: Theme.primary }
                     StyledText { text: "/"; font.pixelSize: Theme.fontSizeSmall-1; color: Theme.surfaceVariantText }
                     StyledText { text: previewPopup._formatTime(mediaPlayer.duration); font.pixelSize: Theme.fontSizeSmall-1; color: Theme.primary }
-                }
-
-                // Save hint: right side (for text files)
-                StyledText {
-                    id: saveHint
-                    anchors.right: parent.right
-                    visible: previewPopup.isText
-                    text: i18n("Ctrl+S to save  ·  Esc/Space to close")
-                    font.pixelSize: Theme.fontSizeSmall - 1
-                    color: Theme.primary
                 }
             }
         }

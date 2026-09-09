@@ -6,6 +6,9 @@
   "App name and Command are required": "Tên ứng dụng và Lệnh là bắt buộc",
   "App name...": "Tên Ứng dụng",
   "Appearance": "Vẻ bề ngoài",
+  "Settings": "Cài đặt",
+  "Popup Color": "Màu cửa sổ bật lên",
+  "SideBar Color": "Màu thanh bên",
   "Audio & Video": "Âm thanh & Video",
   "Background Opacity": "Độ mờ nền",
   "Bg Opacity": "Độ mờ Bg",
@@ -169,5 +172,6 @@
   "Cancelled": "Đã hủy",
   "Preparing paste...": "Đang chuẩn bị dán...",
   "Moving": "Đang di chuyển",
-  "Copying": "Đang sao chép"
+  "Copying": "Đang sao chép",
+  "lines": "dòng"
 }

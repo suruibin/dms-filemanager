@@ -6,6 +6,9 @@
   "App name and Command are required": "アプリ名とコマンドが必要です",
   "App name...": "アプリ名",
   "Appearance": "外観",
+  "Settings": "設定",
+  "Popup Color": "ポップアップの色",
+  "SideBar Color": "サイドバーの色",
   "Audio & Video": "オーディオ & 動画",
   "Background Opacity": "背景の不透明度",
   "Bg Opacity": "背景の不透明度",
@@ -169,5 +172,6 @@
   "Cancelled": "キャンセルされました",
   "Preparing paste...": "貼り付けを準備中...",
   "Moving": "移動中",
-  "Copying": "コピー中"
+  "Copying": "コピー中",
+  "lines": "行"
 }

@@ -6,6 +6,9 @@
   "App name and Command are required": "Требуется имя приложения и команда",
   "App name...": "Название приложения",
   "Appearance": "Появление",
+  "Settings": "Настройки",
+  "Popup Color": "Цвет всплывающего окна",
+  "SideBar Color": "Цвет боковой панели",
   "Audio & Video": "Аудио и Видео",
   "Background Opacity": "Непрозрачность фона",
   "Bg Opacity": "Непрозрачность фона",
@@ -169,5 +172,6 @@
   "Cancelled": "Отменено",
   "Preparing paste...": "Подготовка вставки...",
   "Moving": "Перемещение",
-  "Copying": "Копирование"
+  "Copying": "Копирование",
+  "lines": "строк"
 }
