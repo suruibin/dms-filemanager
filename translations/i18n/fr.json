@@ -173,5 +173,10 @@
   "Preparing paste...": "Préparation du collage...",
   "Moving": "Déplacement",
   "Copying": "Copie",
-  "lines": "lignes"
+  "lines": "lignes",
+  "Move to Trash failed": "Échec de la mise à la corbeille",
+  "Deleted with administrator privileges": "Supprimé avec les privilèges administrateur",
+  "Authentication failed or cancelled": "Échec ou annulation de l'authentification",
+  "No polkit authentication agent, use sudo in a terminal": "Aucun agent d'authentification polkit, utilisez sudo dans un terminal",
+  "File too large to preview (over 10 MB), open it in an external editor": "Fichier trop volumineux pour l'aperçu (plus de 10 Mo), ouvrez-le dans un éditeur externe"
 }

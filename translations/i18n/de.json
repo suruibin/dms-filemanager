@@ -173,5 +173,10 @@
   "Preparing paste...": "Einfügen wird vorbereitet...",
   "Moving": "Wird verschoben",
   "Copying": "Wird kopiert",
-  "lines": "Zeilen"
+  "lines": "Zeilen",
+  "Move to Trash failed": "Verschieben in den Papierkorb fehlgeschlagen",
+  "Deleted with administrator privileges": "Mit Administratorrechten gelöscht",
+  "Authentication failed or cancelled": "Authentifizierung fehlgeschlagen oder abgebrochen",
+  "No polkit authentication agent, use sudo in a terminal": "Kein Polkit-Authentifizierungsagent, bitte sudo im Terminal verwenden",
+  "File too large to preview (over 10 MB), open it in an external editor": "Datei zu groß für die Vorschau (über 10 MB), bitte in einem externen Editor öffnen"
 }

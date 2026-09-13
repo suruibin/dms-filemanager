@@ -173,5 +173,10 @@
   "Preparing paste...": "貼り付けを準備中...",
   "Moving": "移動中",
   "Copying": "コピー中",
-  "lines": "行"
+  "lines": "行",
+  "Move to Trash failed": "ゴミ箱への移動に失敗しました",
+  "Deleted with administrator privileges": "管理者権限で削除しました",
+  "Authentication failed or cancelled": "認証に失敗したか、キャンセルされました",
+  "No polkit authentication agent, use sudo in a terminal": "polkit認証エージェントがありません。ターミナルでsudoを使用してください",
+  "File too large to preview (over 10 MB), open it in an external editor": "ファイルが大きすぎてプレビューできません（10 MB超）。外部エディタで開いてください"
 }

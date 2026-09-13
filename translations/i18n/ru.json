@@ -173,5 +173,10 @@
   "Preparing paste...": "Подготовка вставки...",
   "Moving": "Перемещение",
   "Copying": "Копирование",
-  "lines": "строк"
+  "lines": "строк",
+  "Move to Trash failed": "Не удалось переместить в корзину",
+  "Deleted with administrator privileges": "Удалено с правами администратора",
+  "Authentication failed or cancelled": "Аутентификация не пройдена или отменена",
+  "No polkit authentication agent, use sudo in a terminal": "Нет агента аутентификации polkit, используйте sudo в терминале",
+  "File too large to preview (over 10 MB), open it in an external editor": "Файл слишком велик для предпросмотра (более 10 МБ), откройте его во внешнем редакторе"
 }

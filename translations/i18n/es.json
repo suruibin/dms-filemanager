@@ -173,5 +173,10 @@
   "Preparing paste...": "Preparando pegado...",
   "Moving": "Moviendo",
   "Copying": "Copiando",
-  "lines": "líneas"
+  "lines": "líneas",
+  "Move to Trash failed": "Error al mover a la papelera",
+  "Deleted with administrator privileges": "Eliminado con privilegios de administrador",
+  "Authentication failed or cancelled": "Autenticación fallida o cancelada",
+  "No polkit authentication agent, use sudo in a terminal": "No hay agente de autenticación polkit, use sudo en una terminal",
+  "File too large to preview (over 10 MB), open it in an external editor": "Archivo demasiado grande para previsualizar (más de 10 MB), ábralo en un editor externo"
 }

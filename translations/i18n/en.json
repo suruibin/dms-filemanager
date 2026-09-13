@@ -168,5 +168,10 @@
   "Preparing paste...": "Preparing paste...",
   "Moving": "Moving",
   "Copying": "Copying",
-  "lines": "lines"
+  "lines": "lines",
+  "Move to Trash failed": "Move to Trash failed",
+  "Deleted with administrator privileges": "Deleted with administrator privileges",
+  "Authentication failed or cancelled": "Authentication failed or cancelled",
+  "No polkit authentication agent, use sudo in a terminal": "No polkit authentication agent, use sudo in a terminal",
+  "File too large to preview (over 10 MB), open it in an external editor": "File too large to preview (over 10 MB), open it in an external editor"
 }

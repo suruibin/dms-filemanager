@@ -173,5 +173,10 @@
   "Preparing paste...": "Đang chuẩn bị dán...",
   "Moving": "Đang di chuyển",
   "Copying": "Đang sao chép",
-  "lines": "dòng"
+  "lines": "dòng",
+  "Move to Trash failed": "Di chuyển vào thùng rác thất bại",
+  "Deleted with administrator privileges": "Đã xóa với quyền quản trị",
+  "Authentication failed or cancelled": "Xác thực thất bại hoặc đã hủy",
+  "No polkit authentication agent, use sudo in a terminal": "Không có tác nhân xác thực polkit, hãy dùng sudo trong terminal",
+  "File too large to preview (over 10 MB), open it in an external editor": "Tệp quá lớn để xem trước (trên 10 MB), hãy mở bằng trình soạn thảo bên ngoài"
 }

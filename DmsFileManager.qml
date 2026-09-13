@@ -315,10 +315,14 @@ DesktopPluginComponent {
             }
         }
         root.folderDropdownModel = newModel;
-        // Remove from GTK bookmarks file
+        // Remove from GTK bookmarks file. Substring match preserves the old
+        // sed behaviour (lines may carry a label suffix) without breaking on
+        // "|" or quotes inside paths.
         var bookFile = "/home/suruibin/.config/gtk-3.0/bookmarks";
         var encoded = encodeURIComponent(filePath).replace(/%2F/g, "/");
-        Quickshell.execDetached(["sed", "-i", "\\|" + encoded + "|d", bookFile]);
+        Quickshell.execDetached(["python3", "-c",
+            "import sys;f,u=sys.argv[1:3];open(f,'w').write(''.join(l+chr(10) for l in open(f).read().splitlines() if u not in l))",
+            bookFile, encoded]);
     }
 
     // Inline rename state: file path of the item currently renamed in place
@@ -410,11 +414,9 @@ DesktopPluginComponent {
                 if (root.folderType === "trash") {
                     root.deleteFromTrashPermanently(root.selectedFilePaths[0]);
                 } else {
-                    var paths = root.selectedFilePaths.slice();
+                    const paths = root.selectedFilePaths.slice();
                     root.clearSelection();
-                    for (var i = 0; i < paths.length; i++) {
-                        Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
-                    }
+                    root.trashPaths(paths);
                 }
             }
         }
@@ -457,22 +459,12 @@ DesktopPluginComponent {
             }
             root._previewBusy = true;
             var path = root.selectedFilePaths[0];
-            var found = false;
-            for (var i = 0; i < filteredModel.count; i++) {
-                if (filteredModel.get(i).filePath === path) {
-                    if (filteredModel.get(i).fileIsDir) {
-                        root._previewBusy = false;
-                        return;
-                    }
-                    previewPopup._currentIndex = i;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
+            var entry = root._modelEntryByPath(path);
+            if (!entry || entry.item.fileIsDir) {
                 root._previewBusy = false;
                 return;
             }
+            previewPopup._currentIndex = entry.index;
             previewPopup.filePath = path;
             previewPopup.open();
         }
@@ -483,18 +475,6 @@ DesktopPluginComponent {
             root.showHidden = !root.showHidden;
             if (root.pluginService)
                 root.pluginService.savePluginData(root.pluginId, "showHidden", root.showHidden);
-        }
-    }
-    Shortcut {
-        sequence: StandardKey.Delete
-        onActivated: {
-            if (root.selectedFilePaths.length > 0) {
-                var paths = root.selectedFilePaths.slice();
-                root.clearSelection();
-                for (var i = 0; i < paths.length; i++) {
-                    Quickshell.execDetached(["gio", "trash", "--", root._cleanPath(paths[i])]);
-                }
-            }
         }
     }
     Shortcut {
@@ -562,13 +542,8 @@ DesktopPluginComponent {
             return;
         }
 
-        let lastIndex = -1;
-        for (let i = 0; i < filteredModel.count; i++) {
-            if (filteredModel.get(i).filePath === lastSelectedFilePath) {
-                lastIndex = i;
-                break;
-            }
-        }
+        let anchorEntry = root._modelEntryByPath(lastSelectedFilePath);
+        let lastIndex = anchorEntry ? anchorEntry.index : -1;
 
         if (lastIndex === -1) {
             if (filteredModel.count > currentIndex) {
@@ -669,11 +644,22 @@ DesktopPluginComponent {
     }
 
     function isPathInFilteredModel(path) {
-        for (let i = 0; i < filteredModel.count; i++) {
-            if (filteredModel.get(i).filePath === path)
-                return true;
-        }
-        return false;
+        return root._modelEntryByPath(path) !== null;
+    }
+
+    // ── Trash with permission fallback ─────────────────────────────────────
+    // Trash the given paths with a single gio call. On permission failure
+    // (root-owned entries), retries permanently via polkit — the system
+    // password prompt appears and the delete runs as root.
+    property var _pendingTrashPaths: []
+    property var _elevatedDeletePaths: []
+
+    function trashPaths(paths) {
+        const clean = paths.map(p => root._cleanPath(p));
+        if (clean.length === 0) return;
+        _pendingTrashPaths = clean;
+        trashProc.command = ["gio", "trash"].concat(clean);
+        trashProc.running = true;
     }
 
     function beginInlineRename(filePath) {
@@ -1105,20 +1091,18 @@ DesktopPluginComponent {
         if (selectedFilePaths.length === 1) {
             const selPath = selectedFilePaths[0];
             let info = "";
-            for (let i = 0; i < filteredModel.count; i++) {
-                const item = filteredModel.get(i);
-                if (item.filePath === selPath) {
-                    const name = String(item.fileName || "");
-                    const mtime = item.fileModified ? root.formatDate(item.fileModified) : "";
-                    const isDir = item.fileIsDir;
-                    const size = (!isDir && item.fileSize) ? root.formatFileSize(item.fileSize) : "";
-                    const parts = [name];
-                    if (root.favoritePaths.indexOf(selPath) !== -1) parts[0] = "★ " + name;
-                    if (mtime) parts.push(mtime);
-                    if (size) parts.push(size);
-                    info = parts.join("  ");
-                    break;
-                }
+            const entry = root._modelEntryByPath(selPath);
+            if (entry) {
+                const item = entry.item;
+                const name = String(item.fileName || "");
+                const mtime = item.fileModified ? root.formatDate(item.fileModified) : "";
+                const isDir = item.fileIsDir;
+                const size = (!isDir && item.fileSize) ? root.formatFileSize(item.fileSize) : "";
+                const parts = [name];
+                if (root.favoritePaths.indexOf(selPath) !== -1) parts[0] = "★ " + name;
+                if (mtime) parts.push(mtime);
+                if (size) parts.push(size);
+                info = parts.join("  ");
             }
             root.selectedFileInfo = info;
         } else {
@@ -1287,9 +1271,9 @@ DesktopPluginComponent {
         if (basePath.length > 1 && basePath.charAt(basePath.length - 1) === '/')
             basePath = basePath.substring(0, basePath.length - 1);
 
-        var shellSafe = basePath.replace(/'/g, "'\\''");
+        // "$1" parameterization keeps arbitrary paths out of shell syntax
         Proc.runCommand("pathComplete-" + Math.random(),
-            ["sh", "-c", "ls -1 -p '" + shellSafe + "' 2>/dev/null"],
+            ["sh", "-c", "ls -1 -p -- \"$1\" 2>/dev/null", "sh", basePath],
             (out, code) => {
                 if (code !== 0 || !out) { _pathCompletions = []; return; }
 
@@ -1414,7 +1398,26 @@ DesktopPluginComponent {
         id: filteredModel
     }
 
+    // ── filteredModel lookup cache ─────────────────────────────────────────
+    // filePath -> { index, item }; rebuilt lazily on first lookup and
+    // invalidated by updateFilteredModel() — the only place the model is
+    // cleared/repopulated (setProperty() calls keep existing entries valid).
+    property var _modelEntryCache: null
+
+    function _modelEntryByPath(p) {
+        if (_modelEntryCache === null) {
+            var map = {};
+            for (var i = 0; i < filteredModel.count; i++) {
+                var it = filteredModel.get(i);
+                map[it.filePath] = { index: i, item: it };
+            }
+            _modelEntryCache = map;
+        }
+        return _modelEntryCache[p] || null;
+    }
+
     function updateFilteredModel() {
+        _modelEntryCache = null;
         filteredModel.clear();
         if (folderModel.status !== FolderListModel.Ready) return;
         
@@ -1455,7 +1458,7 @@ DesktopPluginComponent {
                 }
             }
         } catch (e) {
-            console.log("Error loading stacks: " + e);
+            console.error("Error loading stacks: " + e);
         }
 
         for (let i = 0; i < folderModel.count; i++) {
@@ -1573,7 +1576,7 @@ DesktopPluginComponent {
                     }
                 }
             } catch (e) {
-                console.log("Error processing file at index " + i + ": " + e);
+                console.error("Error processing file at index " + i + ": " + e);
             }
         }
         
@@ -1652,12 +1655,9 @@ DesktopPluginComponent {
                     for (let k = 0; k < results.length && k < _pendingDirChecks.length; k++) {
                         let hasContent = parseInt(results[k].trim()) > 0;
                         let dirPath = _pendingDirChecks[k].path;
-                        for (let m = 0; m < filteredModel.count; m++) {
-                            if (filteredModel.get(m).filePath === dirPath) {
-                                filteredModel.setProperty(m, "isEmpty", !hasContent);
-                                break;
-                            }
-                        }
+                        let dirEntry = root._modelEntryByPath(dirPath);
+                        if (dirEntry)
+                            filteredModel.setProperty(dirEntry.index, "isEmpty", !hasContent);
                     }
                 }
             });
@@ -1687,14 +1687,12 @@ DesktopPluginComponent {
                         }
                         if (aName) {
                             let p = _pendingDesktopPaths[di];
-                            for (let m = 0; m < filteredModel.count; m++) {
-                                if (filteredModel.get(m).filePath === p) {
-                                    filteredModel.setProperty(m, "appName", aName);
-                                    filteredModel.setProperty(m, "appIcon", aIcon);
-                                    filteredModel.setProperty(m, "appExec", aExec);
-                                    filteredModel.setProperty(m, "displayBaseName", aName);
-                                    break;
-                                }
+                            let de = root._modelEntryByPath(p);
+                            if (de) {
+                                filteredModel.setProperty(de.index, "appName", aName);
+                                filteredModel.setProperty(de.index, "appIcon", aIcon);
+                                filteredModel.setProperty(de.index, "appExec", aExec);
+                                filteredModel.setProperty(de.index, "displayBaseName", aName);
                             }
                         }
                     }
@@ -2550,9 +2548,8 @@ DesktopPluginComponent {
                                 const path = root.selectedFilePaths[0];
                                 quickMenu.currentPath = path;
                                 quickMenu.currentName = path.split('/').pop();
-                                for (let i = 0; i < filteredModel.count; i++) {
-                                    if (filteredModel.get(i).filePath === path) { quickMenu.currentIsDir = filteredModel.get(i).fileIsDir; break; }
-                                }
+                                const me = root._modelEntryByPath(path);
+                                if (me) quickMenu.currentIsDir = me.item.fileIsDir;
                             }
                             quickMenu.open();
                         }
@@ -3957,8 +3954,7 @@ DesktopPluginComponent {
                             visible: root.selectedFilePaths.every(p => !p.startsWith("stack://")),
                             action: function() {
                                 quickMenu.close();
-                                const cleanPaths = root.selectedFilePaths.map(p => root._cleanPath(p));
-                                Quickshell.execDetached(["gio", "trash"].concat(cleanPaths));
+                                root.trashPaths(root.selectedFilePaths);
                                 root.clearSelection();
                             }
                         }
@@ -5252,9 +5248,15 @@ DesktopPluginComponent {
         id: mountProc
         property string pendingDevice: ""
         stdout: StdioCollector {}
+        stderr: StdioCollector { id: mountErrCollector }
         onExited: function(exitCode, exitStatus) {
             if (exitCode === 0 && mountProc.pendingDevice)
                 rescanTimer.start();
+            else if (exitCode !== 0) {
+                var msg = mountErrCollector.text.trim();
+                if (msg.length > 140) msg = msg.substring(0, 140) + "…";
+                ToastService.showToast(i18n("Mount failed") + (msg ? ": " + msg : ""), ToastService.levelError);
+            }
             mountProc.pendingDevice = "";
         }
     }
@@ -5263,10 +5265,61 @@ DesktopPluginComponent {
         id: unmountProc
         property string pendingDevice: ""
         stdout: StdioCollector {}
+        stderr: StdioCollector { id: unmountErrCollector }
         onExited: function(exitCode, exitStatus) {
             if (exitCode === 0 && unmountProc.pendingDevice)
                 rescanTimer.start();
+            else if (exitCode !== 0) {
+                var msg = unmountErrCollector.text.trim();
+                if (msg.length > 140) msg = msg.substring(0, 140) + "…";
+                ToastService.showToast(i18n("Unmount failed") + (msg ? ": " + msg : ""), ToastService.levelError);
+            }
             unmountProc.pendingDevice = "";
+        }
+    }
+
+    // gio trash runner — reports failures as toast, escalates permission
+    // errors to a polkit-elevated permanent delete
+    Process {
+        id: trashProc
+        stdout: StdioCollector {}
+        stderr: StdioCollector { id: trashErrCollector }
+        onExited: function(exitCode, exitStatus) {
+            const paths = root._pendingTrashPaths;
+            root._pendingTrashPaths = [];
+            if (exitCode === 0 || paths.length === 0) return;
+            var err = trashErrCollector.text.trim();
+            if (/Permission denied|Operation not permitted|Access denied/i.test(err)) {
+                root._elevatedDeletePaths = paths;
+                pkexecDelProc.command = ["pkexec", "rm", "-rf", "--"].concat(paths);
+                pkexecDelProc.running = true;
+            } else {
+                if (err.length > 140) err = err.substring(0, 140) + "…";
+                ToastService.showToast(i18n("Move to Trash failed") + (err ? ": " + err : ""), ToastService.levelError);
+            }
+        }
+    }
+
+    // Elevated permanent delete fallback (password prompt via polkit)
+    Process {
+        id: pkexecDelProc
+        stdout: StdioCollector {}
+        stderr: StdioCollector { id: pkDelErrCollector }
+        onExited: function(exitCode, exitStatus) {
+            root._elevatedDeletePaths = [];
+            if (exitCode === 0) {
+                ToastService.showToast(i18n("Deleted with administrator privileges"), ToastService.levelInfo);
+                return;
+            }
+            var err = pkDelErrCollector.text.trim();
+            if (/Not authorized/i.test(err)) {
+                ToastService.showToast(i18n("Authentication failed or cancelled"), ToastService.levelInfo);
+            } else if (/agent/i.test(err)) {
+                ToastService.showToast(i18n("No polkit authentication agent, use sudo in a terminal"), ToastService.levelError);
+            } else {
+                if (err.length > 140) err = err.substring(0, 140) + "…";
+                ToastService.showToast(i18n("Delete failed") + (err ? ": " + err : ""), ToastService.levelError);
+            }
         }
     }
 
@@ -5396,18 +5449,9 @@ DesktopPluginComponent {
             if (isText) {
                 // Ensure text loads even when onFilePathChanged didn't fire
                 // because filePath was set to the same value (close+reopen
-                // of the same file without navigating elsewhere). Assigning
-                // an unchanged path does NOT retrigger FileView, so use
-                // reload() in that case.
-                if (!_textLoading) {
-                    _textLoading = true;
-                    textLoadTimer.restart();
-                    var p = "file://" + filePath;
-                    if (textFileLoader.path === p)
-                        textFileLoader.reload();
-                    else
-                        textFileLoader.path = p;
-                }
+                // of the same file without navigating elsewhere).
+                if (!_textLoading)
+                    _beginTextLoad();
             }
         }
 
@@ -5455,11 +5499,6 @@ DesktopPluginComponent {
             Quickshell.execDetached(["python3", "-c",
                 "open('" + fpath.replace(/'/g, "'\\''") + "','w').write('" + escaped + "')"
             ]);
-        }
-
-        Shortcut {
-            sequence: "Ctrl+S"
-            onActivated: previewPopup._saveTextFile()
         }
 
         Timer {
@@ -5528,11 +5567,8 @@ DesktopPluginComponent {
                                     };
                                 });
             }
-            if (isText) {
-                _textLoading = true;
-                textFileLoader.path = "file://" + filePath;
-                textLoadTimer.restart();
-            }
+            if (isText)
+                _beginTextLoad();
             // In-popup wheel/slideshow transitions: use crossfade system.
             if (isImage && filePath && previewPopup.opened)
                 imagePreviewContainer._crossFadeTo(filePath);
@@ -5584,6 +5620,24 @@ DesktopPluginComponent {
         readonly property var videoExts: ["mkv", "mp4", "avi", "mov", "webm", "flv", "wmv", "m4v", "mpg", "mpeg"]
         readonly property bool isImage: imageExts.indexOf(fileExt) !== -1
         readonly property bool isText: textExts.indexOf(fileExt) !== -1
+
+        // Refuse to slurp huge files into memory — show a hint instead.
+        readonly property int _textPreviewMaxBytes: 10 * 1024 * 1024
+
+        function _beginTextLoad() {
+            if (_fileMeta && _fileMeta.size > _textPreviewMaxBytes) {
+                _textLoading = false;
+                _textContent = i18n("File too large to preview (over 10 MB), open it in an external editor");
+                return;
+            }
+            _textLoading = true;
+            var p = "file://" + filePath;
+            if (textFileLoader.path === p)
+                textFileLoader.reload();
+            else
+                textFileLoader.path = p;
+            textLoadTimer.restart();
+        }
         readonly property bool isVideo: videoExts.indexOf(fileExt) !== -1
 
         background: Rectangle {

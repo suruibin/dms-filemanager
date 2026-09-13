@@ -174,5 +174,10 @@
   "Preparing paste...": "正在准备粘贴...",
   "Moving": "正在移动",
   "Copying": "正在复制",
-  "lines": "行"
+  "lines": "行",
+  "Move to Trash failed": "移入回收站失败",
+  "Deleted with administrator privileges": "已通过管理员权限删除",
+  "Authentication failed or cancelled": "认证未通过，已取消删除",
+  "No polkit authentication agent, use sudo in a terminal": "无 polkit 认证代理，请在终端使用 sudo 删除",
+  "File too large to preview (over 10 MB), open it in an external editor": "文件过大（超过 10 MB），请用外部编辑器打开"
 }

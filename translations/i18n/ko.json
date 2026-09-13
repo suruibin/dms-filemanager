@@ -173,5 +173,10 @@
   "Preparing paste...": "붙여넣기 준비 중...",
   "Moving": "이동 중",
   "Copying": "복사 중",
-  "lines": "줄"
+  "lines": "줄",
+  "Move to Trash failed": "휴지통으로 이동 실패",
+  "Deleted with administrator privileges": "관리자 권한으로 삭제되었습니다",
+  "Authentication failed or cancelled": "인증에 실패했거나 취소되었습니다",
+  "No polkit authentication agent, use sudo in a terminal": "polkit 인증 에이전트가 없습니다. 터미널에서 sudo를 사용하세요",
+  "File too large to preview (over 10 MB), open it in an external editor": "파일이 너무 커서 미리볼 수 없습니다(10 MB 초과). 외부 편집기로 여세요"
 }
