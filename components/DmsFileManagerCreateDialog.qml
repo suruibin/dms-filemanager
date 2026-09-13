@@ -75,6 +75,11 @@ Popup {
 
     Component.onCompleted: _loadPluginTranslations(pluginLanguage)
 
+    // Quote an arbitrary string as a single-quoted POSIX shell word
+    function _shellQuote(s) {
+        return "'" + String(s).replace(/'/g, "'\\''") + "'";
+    }
+
     onOpened: {
         Qt.callLater(() => {
             if (createDialog.inputField) {
@@ -237,11 +242,11 @@ Popup {
         
         const targetPath = pathStr + "/" + name;
         const isFolder = createDialog.isFolder;
-        const safePath = targetPath.replace(/'/g, "'\\''");
+        const safePath = _shellQuote(targetPath);
         createDialog.close();
 
         Proc.runCommand("createDedup-" + Math.random(), ["sh", "-c",
-            "path='" + safePath + "';\n" +
+            "path=" + safePath + ";\n" +
             "isfolder=" + (isFolder ? "1" : "0") + ";\n" +
             'if [ -e "$path" ]; then\n' +
             '  base="${path%.*}"; ext="${path##*.}";\n' +

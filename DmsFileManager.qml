@@ -320,9 +320,12 @@ DesktopPluginComponent {
         // "|" or quotes inside paths.
         var bookFile = "/home/suruibin/.config/gtk-3.0/bookmarks";
         var encoded = encodeURIComponent(filePath).replace(/%2F/g, "/");
-        Quickshell.execDetached(["python3", "-c",
+        Proc.runCommand("removeBookmark-" + Math.random(), ["python3", "-c",
             "import sys;f,u=sys.argv[1:3];open(f,'w').write(''.join(l+chr(10) for l in open(f).read().splitlines() if u not in l))",
-            bookFile, encoded]);
+            bookFile, encoded], function(out, code) {
+            if (code !== 0)
+                ToastService.showToast(i18n("Failed to remove bookmark"), ToastService.levelError);
+        });
     }
 
     // Inline rename state: file path of the item currently renamed in place
@@ -624,7 +627,15 @@ DesktopPluginComponent {
             const parts = pathStr.split("/");
             parts.pop();
             const newPath = parts.join("/") + "/" + newName;
-            Quickshell.execDetached(["mv", pathStr, newPath]);
+            Proc.runCommand("rename-" + Math.random(), ["sh", "-c",
+                "mv " + _shellQuote(pathStr) + " " + _shellQuote(newPath) + " 2>&1"
+            ], function(out, code) {
+                if (code !== 0) {
+                    var err = out && out.trim() ? out.trim() : "";
+                    if (err.length > 120) err = err.substring(0, 120) + "…";
+                    ToastService.showToast(i18n("Rename failed") + (err ? ": " + err : ""), ToastService.levelError);
+                }
+            }, 0, Proc.noTimeout);
         } catch (e) {
             ToastService.showToast(i18n("Rename failed") + ": " + e.message, ToastService.levelError);
         }
@@ -657,6 +668,9 @@ DesktopPluginComponent {
     function trashPaths(paths) {
         const clean = paths.map(p => root._cleanPath(p));
         if (clean.length === 0) return;
+        // Large batches can take a while — give immediate feedback
+        if (clean.length >= 10)
+            ToastService.showToast(i18n("Deleting…") + " (" + clean.length + ")", ToastService.levelInfo);
         _pendingTrashPaths = clean;
         trashProc.command = ["gio", "trash"].concat(clean);
         trashProc.running = true;
@@ -686,14 +700,21 @@ DesktopPluginComponent {
         }
         // Check if file has execute permission; if so run directly,
         // otherwise use gio open (for documents like .pdf, .txt etc.)
-        let safePath = clean.replace(/'/g, "'\\''");
         Proc.runCommand("execCheck-" + Math.random(), ["sh", "-c",
-            "test -x '" + safePath + "' && echo EXEC || echo NOTEXEC"
+            "test -x " + _shellQuote(clean) + " && echo EXEC || echo NOTEXEC"
         ], function(out) {
             if (String(out).trim() === "EXEC") {
                 Quickshell.execDetached([clean]);
             } else {
-                Quickshell.execDetached(["gio", "open", clean]);
+                Proc.runCommand("gioOpen-" + Math.random(), ["sh", "-c",
+                    "gio open " + _shellQuote(clean) + " 2>&1"
+                ], function(out2, code) {
+                    if (code !== 0) {
+                        var err = out2 && out2.trim() ? out2.trim() : "";
+                        if (err.length > 120) err = err.substring(0, 120) + "…";
+                        ToastService.showToast(i18n("Failed to open file") + (err ? ": " + err : ""), ToastService.levelError);
+                    }
+                });
             }
         });
     }
@@ -727,6 +748,11 @@ DesktopPluginComponent {
         trashActionPopup.open();
     }
 
+    // Quote an arbitrary string as a single-quoted POSIX shell word
+    function _shellQuote(s) {
+        return "'" + String(s).replace(/'/g, "'\\''") + "'";
+    }
+
     // Restore a file from trash back to its original location
     function restoreFromTrash(filePath) {
         var paths = root.selectedFilePaths.length > 0
@@ -738,18 +764,22 @@ DesktopPluginComponent {
             var p = paths[ri];
             if (!p || p.startsWith("stack://")) continue;
             var clean = root._cleanPath(p);
-            var safePath = clean.replace(/'/g, "'\\''");
             Proc.runCommand("restoreTrash-" + Math.random(), ["sh", "-c",
-                "info=\"$HOME/.local/share/Trash/info/$(basename '" + safePath + "').trashinfo\";\n" +
+                "info=\"$HOME/.local/share/Trash/info/$(basename " + _shellQuote(clean) + ").trashinfo\";\n" +
                 'orig=$(sed -n \'s/^Path=//p\' "$info" 2>/dev/null);\n' +
                 'if [ -z "$orig" ]; then echo "NOINFO"; exit 2; fi;\n' +
+                // trashinfo Path= is URI-encoded (gio writes %20 for spaces);
+                // decode before use or restored files end up named "New%20Document.txt"
+                'dec=$(python3 -c "import sys,urllib.parse;sys.stdout.write(urllib.parse.unquote(sys.argv[1]))" "$orig" 2>/dev/null);\n' +
+                'if [ -n "$dec" ]; then orig="$dec"; fi;\n' +
                 'if [ -e "$orig" ]; then echo "CONFLICT:$orig"; exit 1; fi;\n' +
-                "mkdir -p \"$(dirname \"$orig\")\" && mv '" + safePath + "' \"$orig\" && rm -f \"$info\" &&\n" +
+                "mkdir -p \"$(dirname \"$orig\")\" && mv " + _shellQuote(clean) + " \"$orig\" && rm -f \"$info\" &&\n" +
                 'echo "OK:$orig"'
             ], function(out, code) {
                 if (code === 0 && out) {
                     var line = String(out).trim();
                     if (line.startsWith("OK:")) {
+                        ToastService.showToast(i18n("Restored to %1").arg(line.substring(3)), ToastService.levelInfo);
                         root.refreshCurrentFolder();
                     }
                 } else if (code === 1) {
@@ -757,7 +787,7 @@ DesktopPluginComponent {
                 } else {
                     ToastService.showToast(i18n("Cannot restore — trash info not found"), ToastService.levelError);
                 }
-            });
+            }, 0, Proc.noTimeout);
         }
     }
 
@@ -772,10 +802,9 @@ DesktopPluginComponent {
             var p = paths[ri];
             if (!p || p.startsWith("stack://")) continue;
             var clean = root._cleanPath(p);
-            var safePath = clean.replace(/'/g, "'\\''");
             Proc.runCommand("permDelete-" + Math.random(), ["sh", "-c",
-                "rm -rf '" + safePath + "' && " +
-                "rm -f \"$HOME/.local/share/Trash/info/$(basename '" + safePath + "').trashinfo\"" + " && echo OK"
+                "rm -rf " + _shellQuote(clean) + " && " +
+                "rm -f \"$HOME/.local/share/Trash/info/$(basename " + _shellQuote(clean) + ").trashinfo\"" + " && echo OK"
             ], function(out, code) {
                 if (code === 0) {
                     ToastService.showToast(i18n("Permanently deleted"), ToastService.levelInfo);
@@ -783,7 +812,7 @@ DesktopPluginComponent {
                 } else {
                     ToastService.showToast(i18n("Delete failed"), ToastService.levelError);
                 }
-            });
+            }, 0, Proc.noTimeout);
         }
     }
 
@@ -931,11 +960,10 @@ DesktopPluginComponent {
         var name = cleanPath.split("/").pop();
         var line = uri + " " + name;
 
-        var bookmarksFile = "/home/suruibin/.config/gtk-3.0/bookmarks";
+        var bookmarksFile = "\"$HOME/.config/gtk-3.0/bookmarks\"";
 
-        var safeLine = line.replace(/'/g, "'\\''");
         Proc.runCommand("addBookmark-" + Math.random(), ["sh", "-c",
-            "grep -qxF '" + safeLine + "' " + bookmarksFile + " || echo '" + safeLine + "' >> " + bookmarksFile],
+            "grep -qxF " + _shellQuote(line) + " " + bookmarksFile + " || echo " + _shellQuote(line) + " >> " + bookmarksFile],
             function(out, code) {
                 root.buildFolderDropdownModel();
             });
@@ -1050,8 +1078,7 @@ DesktopPluginComponent {
 
     function _checkPasteConflicts(ops) {
         var checks = ops.map(function(o) {
-            var safe = o.dest.replace(/'/g, "'\\''");
-            return "test -e '" + safe + "' && echo 1 || echo 0";
+            return "test -e " + _shellQuote(o.dest) + " && echo 1 || echo 0";
         }).join("; ");
         Proc.runCommand("pasteCheck-" + Math.random(), ["sh", "-c", checks], function(out, code) {
             if (code !== 0 || !out) {
@@ -1542,7 +1569,7 @@ DesktopPluginComponent {
                 // Collect dir paths for batch empty check
                 if (fIsDir) {
                     let checkPath = root._cleanPath(pathStr);
-                    _pendingDirChecks.push({ path: pathStr, safePath: checkPath.replace(/'/g, "'\\''") });
+                    _pendingDirChecks.push({ path: pathStr, safePath: checkPath });
                 }
                 
                 let expandedStackId = fileToExpandedStackMap[pathStr];
@@ -1650,7 +1677,7 @@ DesktopPluginComponent {
 
         // ── Batch empty-folder check (single Proc instead of one per dir) ──
         if (_pendingDirChecks.length > 0) {
-            let cmds = _pendingDirChecks.map(d => "ls -A '" + d.safePath + "' 2>/dev/null | head -1 | wc -l").join("; ");
+            let cmds = _pendingDirChecks.map(d => "ls -A " + _shellQuote(d.safePath) + " 2>/dev/null | head -1 | wc -l").join("; ");
             Proc.runCommand("batchEmpty-" + Math.random(), ["sh", "-c", cmds], (out, code) => {
                 if (code === 0 && out) {
                     let results = String(out).trim().split("\n");
@@ -1669,8 +1696,7 @@ DesktopPluginComponent {
         if (_pendingDesktopPaths.length > 0) {
             let cmds = [];
             for (let di = 0; di < _pendingDesktopPaths.length; di++) {
-                let safe = _pendingDesktopPaths[di].replace(/'/g, "'\\''");
-                cmds.push("echo '===DESKTOP" + di + "===' && cat '" + safe + "'");
+                cmds.push("echo '===DESKTOP" + di + "===' && cat " + _shellQuote(_pendingDesktopPaths[di]));
             }
             Proc.runCommand("batchDesktop-" + Math.random(), ["sh", "-c", cmds.join("; ")], (out, code) => {
                 if (code === 0 && out && String(out).trim() !== "") {
@@ -1705,8 +1731,7 @@ DesktopPluginComponent {
         // ── AppImage icon matching via ~/.config/DankMaterialShell/appicons/ ──
         if (root.extractAppIcons) {
         let _iconDir = root._appIconCacheDir;
-        let _safeIconDir = _iconDir.replace(/'/g, "'\\''");
-        Proc.runCommand("scanAppIcon-" + Math.random(), ["sh", "-c", "ls -1 '" + _safeIconDir + "' 2>/dev/null | head -100"], (out, code) => {
+        Proc.runCommand("scanAppIcon-" + Math.random(), ["sh", "-c", "ls -1 " + _shellQuote(_iconDir) + " 2>/dev/null | head -100"], (out, code) => {
             if (code !== 0 || !out || String(out).trim() === "") return;
             let iconFiles = String(out).trim().split('\n').filter(f => {
                 let lower = f.toLowerCase();
@@ -4653,12 +4678,15 @@ DesktopPluginComponent {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
+                                ToastService.showToast(i18n("Emptying trash…"), ToastService.levelInfo);
                                 Proc.runCommand("emptyTrash-" + Math.random(),
                                     ["gio", "trash", "--empty"], (out, code) => {
                                     if (code !== 0)
                                         ToastService.showToast(i18n("Failed to empty trash") + (out && out.trim() ? ": " + out.trim() : ""), ToastService.levelError);
+                                    else
+                                        ToastService.showToast(i18n("Trash emptied"), ToastService.levelInfo);
                                     folderModel.folder = Qt.resolvedUrl(root.targetFolderUrl);
-                                });
+                                }, 0, Proc.noTimeout);
                                 emptyTrashConfirm.close();
                             }
                         }
@@ -5295,11 +5323,20 @@ DesktopPluginComponent {
         onExited: function(exitCode, exitStatus) {
             const paths = root._pendingTrashPaths;
             root._pendingTrashPaths = [];
-            if (exitCode === 0 || paths.length === 0) return;
+            if (exitCode === 0 || paths.length === 0) {
+                if (exitCode === 0 && paths.length >= 10)
+                    ToastService.showToast(i18n("Deleted %1 items").arg(paths.length), ToastService.levelInfo);
+                return;
+            }
             var err = trashErrCollector.text.trim();
             if (/Permission denied|Operation not permitted|Access denied/i.test(err)) {
                 root._elevatedDeletePaths = paths;
-                pkexecDelProc.command = ["pkexec", "rm", "-rf", "--"].concat(paths);
+                // NoNewPrivs sessions (niri --session hardening) break setuid
+                // pkexec. Ask the root systemd manager to run the delete —
+                // polkit still gates it, no setuid involved anywhere.
+                pkexecDelProc.command = ["systemd-run", "--system", "--collect",
+                    "--unit=dms-elevdel-" + Math.random().toString(36).slice(2, 8),
+                    "rm", "-rf", "--"].concat(paths);
                 pkexecDelProc.running = true;
             } else {
                 if (err.length > 140) err = err.substring(0, 140) + "…";
@@ -5320,7 +5357,7 @@ DesktopPluginComponent {
                 return;
             }
             var err = pkDelErrCollector.text.trim();
-            if (/Not authorized/i.test(err)) {
+            if (/not authorized|access denied|authentication required/i.test(err)) {
                 ToastService.showToast(i18n("Authentication failed or cancelled"), ToastService.levelInfo);
             } else if (/agent/i.test(err)) {
                 ToastService.showToast(i18n("No polkit authentication agent, use sudo in a terminal"), ToastService.levelError);
@@ -5495,7 +5532,7 @@ DesktopPluginComponent {
         function _saveTextFile() {
             if (!isText) return;
             var content = _textContent || "";
-            var fpath = filePath;
+            var fpath = root._cleanPath(filePath);
             // Escape content for Python single-quoted string literal
             var escaped = content
                 .replace(/\\/g, "\\\\")
@@ -5504,15 +5541,17 @@ DesktopPluginComponent {
                 .replace(/\r/g, "\\r")
                 .replace(/\t/g, "\\t")
                 .replace(/\f/g, "\\f");
+            // Path passed via argv — no shell/python escaping needed
             Proc.runCommand("saveText-" + Math.random(), ["python3", "-c",
-                "open('" + fpath.replace(/'/g, "'\\''") + "','w').write('" + escaped + "')"
+                "import sys;open(sys.argv[1],'w').write('" + escaped + "')",
+                fpath
             ], (out, code) => {
                 if (code !== 0) {
                     var err = out && out.trim() ? out.trim().split("\n").pop() : "";
                     if (err.length > 120) err = err.substring(0, 120) + "…";
                     ToastService.showToast(i18n("Failed to save file") + (err ? ": " + err : ""), ToastService.levelError);
                 }
-            });
+            }, 0, Proc.noTimeout);
         }
 
         Timer {
@@ -6371,35 +6410,40 @@ DesktopPluginComponent {
             .replace(/[-_]\d+([-_.]\d+)*([-_][a-z]*\d*)?$/i, "")
             .replace(/(\.v?\d+([-_.]\d+)*([-_.][a-z]+\d*)?)$/i, "")
             .replace(/[-_](fixed|stable|beta|alpha|rc|patch|debug|release|final|portable|setup|linux)$/i, "");
-        let safePath = appPath.replace(/'/g, "'\\''");
-        let safeDir = root._appIconCacheDir.replace(/'/g, "'\\''");
-        let safeTmp = (root._appIconCacheDir + "/tmp-" + cleanName).replace(/'/g, "'\\''");
+        let qPath = _shellQuote(appPath);
+        let qDir = _shellQuote(root._appIconCacheDir);
+        let qTmp = _shellQuote(root._appIconCacheDir + "/tmp-" + cleanName);
+        let qIconPng = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".png");
+        let qIconSvg = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".svg");
+        let qResPng = _shellQuote(cleanName + ".png");
+        let qResSvg = _shellQuote(cleanName + ".svg");
+        let qGlob = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".*");
 
         Proc.runCommand("extract-" + idx, ["sh", "-c",
-            "mkdir -p '" + safeDir + "' && " +
-            "rm -rf '" + safeTmp + "' && mkdir -p '" + safeTmp + "' && " +
-            "cd '" + safeTmp + "' && " +
+            "mkdir -p " + qDir + " && " +
+            "rm -rf " + qTmp + " && mkdir -p " + qTmp + " && " +
+            "cd " + qTmp + " && " +
             "T='timeout 45'; " +
             "if ! command -v timeout >/dev/null 2>&1; then T=''; fi; " +
-            "$T '" + safePath + "' --appimage-extract >/dev/null 2>&1; " +
+            "$T " + qPath + " --appimage-extract >/dev/null 2>&1; " +
             "RES=''; " +
             "for icon in $(find squashfs-root -maxdepth 5 -name '*.png' 2>/dev/null | head -5); do " +
             "  R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
-            "  [ -f \"$R\" ] && cp \"$R\" '" + safeDir + "/" + cleanName + ".png' 2>/dev/null && RES='" + cleanName + ".png' && break; " +
+            "  [ -f \"$R\" ] && cp \"$R\" " + qIconPng + " 2>/dev/null && RES=" + qResPng + " && break; " +
             "done; " +
             "if [ -z \"$RES\" ]; then " +
             "  for icon in $(find squashfs-root -maxdepth 5 -name '*.svg' -o -name '.DirIcon' 2>/dev/null | head -5); do " +
             "    R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
             "    [ -f \"$R\" ] && EXT=\"${R##*.}\" && " +
             "    if [ \"$EXT\" = \"DirIcon\" ]; then " +
-            "      cp \"$R\" '" + safeDir + "/" + cleanName + ".png' 2>/dev/null && RES='" + cleanName + ".png' && break; " +
+            "      cp \"$R\" " + qIconPng + " 2>/dev/null && RES=" + qResPng + " && break; " +
             "    else " +
-            "      cp \"$R\" '" + safeDir + "/" + cleanName + ".svg' 2>/dev/null && RES='" + cleanName + ".svg' && break; " +
+            "      cp \"$R\" " + qIconSvg + " 2>/dev/null && RES=" + qResSvg + " && break; " +
             "    fi; " +
             "  done; " +
             "fi; " +
-            "rm -rf '" + safeTmp + "'; " +
-            "ls -1 '" + safeDir + "/" + cleanName + ".*' 2>/dev/null | head -1 || echo '0'"
+            "rm -rf " + qTmp + "; " +
+            "ls -1 " + qGlob + " 2>/dev/null | head -1 || echo '0'"
         ], function(out) {
             let r = String(out).trim();
             if (r && r !== "0") {

@@ -73,6 +73,11 @@ Popup {
 
     Component.onCompleted: _loadPluginTranslations(pluginLanguage)
 
+    // Quote an arbitrary string as a single-quoted POSIX shell word
+    function _shellQuote(s) {
+        return "'" + String(s).replace(/'/g, "'\\''") + "'";
+    }
+
     function fetchApps() {
         // Fetch all apps directly from Quickshell's DesktopEntries singleton
         const allEntries = DesktopEntries.applications.values;
@@ -441,12 +446,16 @@ Popup {
         const targetPath = pathStr + "/" + safeName + ".desktop";
         const content = "[Desktop Entry]\nType=Application\nName=" + appName + "\nExec=" + appExec + "\nIcon=" + appIcon + "\nTerminal=false\n";
         try {
-            const escapedContent = content.replace(/'/g, "'\\''");
-            const escapedPath = targetPath.replace(/'/g, "'\\''");
-            const shellCmd = "printf '%s' '" + escapedContent + "' > '" + escapedPath + "'";
-            Quickshell.execDetached(["sh", "-c", shellCmd]);
+            const shellCmd = "printf '%s' " + _shellQuote(content) + " > " + _shellQuote(targetPath) + " 2>&1";
+            Proc.runCommand("createAppShortcut-" + Math.random(), ["sh", "-c", shellCmd], function(out, code) {
+                if (code !== 0) {
+                    var err = out && out.trim() ? out.trim() : "";
+                    if (err.length > 120) err = err.substring(0, 120) + "…";
+                    ToastService.showToast(i18n("Create failed") + (err ? ": " + err : ""), ToastService.levelError);
+                }
+            });
         } catch (e) {
-            ToastService.showToast("Create error: " + e.message, ToastService.levelError);
+            ToastService.showToast(i18n("Create failed") + ": " + e.message, ToastService.levelError);
         }
         createAppDialog.close();
     }
@@ -473,12 +482,16 @@ Popup {
 
         try {
             // Write to file cleanly using POSIX printf, removing dependency on python3 for writing files
-            const escapedContent = content.replace(/'/g, "'\\''");
-            const escapedPath = targetPath.replace(/'/g, "'\\''");
-            const shellCmd = "printf '%s' '" + escapedContent + "' > '" + escapedPath + "'";
-            Quickshell.execDetached(["sh", "-c", shellCmd]);
+            const shellCmd = "printf '%s' " + _shellQuote(content) + " > " + _shellQuote(targetPath) + " 2>&1";
+            Proc.runCommand("createApp-" + Math.random(), ["sh", "-c", shellCmd], function(out, code) {
+                if (code !== 0) {
+                    var err = out && out.trim() ? out.trim() : "";
+                    if (err.length > 120) err = err.substring(0, 120) + "…";
+                    ToastService.showToast(i18n("Create failed") + (err ? ": " + err : ""), ToastService.levelError);
+                }
+            });
         } catch (e) {
-            ToastService.showToast("Create error: " + e.message, ToastService.levelError);
+            ToastService.showToast(i18n("Create failed") + ": " + e.message, ToastService.levelError);
         }
         createAppDialog.close();
     }
