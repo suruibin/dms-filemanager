@@ -289,6 +289,9 @@ DesktopPluginComponent {
     onExtractAppIconsChanged: { if (extractAppIcons) refreshCurrentFolder(); }
     readonly property string _appIconCacheDir: String(Platform.StandardPaths.writableLocation(Platform.StandardPaths.HomeLocation)).replace(/^file:\/\//, "") + "/.config/DankMaterialShell/appicons"
     property var _cachedAppIcons: ({})
+    // Session-level "no icon found" markers — avoids re-running the (slow)
+    // extraction pipeline for icon-less AppImages on every folder refresh
+    property var _extractFailedApps: ({})
     property string emptyColor: pluginData.emptyColor ?? "#FFEA00"
     // Resolved color for the empty indicator dot: "" (follow theme) → primary
     readonly property string emptyIndicatorColor: emptyColor !== "" ? emptyColor : Theme.primary
@@ -6377,6 +6380,7 @@ DesktopPluginComponent {
             let item = filteredModel.get(_k);
             if (item.fileIsDir || !/\.AppImage$/i.test(item.fileName)) continue;
             if (item.appIcon && item.appIcon !== "") continue;
+            if (root._extractFailedApps[item.fileName]) continue;
             let _matchBase = item.fileName.replace(/\.AppImage$/i, "").toLowerCase();
             // check global cache
             if (_cachedAppIcons[_matchBase]) continue;
@@ -6413,43 +6417,64 @@ DesktopPluginComponent {
         let qPath = _shellQuote(appPath);
         let qDir = _shellQuote(root._appIconCacheDir);
         let qTmp = _shellQuote(root._appIconCacheDir + "/tmp-" + cleanName);
-        let qIconPng = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".png");
-        let qIconSvg = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".svg");
-        let qResPng = _shellQuote(cleanName + ".png");
-        let qResSvg = _shellQuote(cleanName + ".svg");
-        let qGlob = _shellQuote(root._appIconCacheDir + "/" + cleanName + ".*");
+        let qOut = _shellQuote(root._appIconCacheDir + "/" + cleanName);
 
+        // Staged pattern extraction (same strategy as dmsconky launcher):
+        // each stage pulls only icon-sized KBs instead of unpacking the whole
+        // squashfs. png → svg → .DirIcon → usr/share/{icons,pixmaps} → full.
         Proc.runCommand("extract-" + idx, ["sh", "-c",
             "mkdir -p " + qDir + " && " +
             "rm -rf " + qTmp + " && mkdir -p " + qTmp + " && " +
             "cd " + qTmp + " && " +
-            "T='timeout 45'; " +
-            "if ! command -v timeout >/dev/null 2>&1; then T=''; fi; " +
-            "$T " + qPath + " --appimage-extract >/dev/null 2>&1; " +
-            "RES=''; " +
-            "for icon in $(find squashfs-root -maxdepth 5 -name '*.png' 2>/dev/null | head -5); do " +
-            "  R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
-            "  [ -f \"$R\" ] && cp \"$R\" " + qIconPng + " 2>/dev/null && RES=" + qResPng + " && break; " +
-            "done; " +
-            "if [ -z \"$RES\" ]; then " +
-            "  for icon in $(find squashfs-root -maxdepth 5 -name '*.svg' -o -name '.DirIcon' 2>/dev/null | head -5); do " +
-            "    R=\"$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\")\"; " +
-            "    [ -f \"$R\" ] && EXT=\"${R##*.}\" && " +
-            "    if [ \"$EXT\" = \"DirIcon\" ]; then " +
-            "      cp \"$R\" " + qIconPng + " 2>/dev/null && RES=" + qResPng + " && break; " +
-            "    else " +
-            "      cp \"$R\" " + qIconSvg + " 2>/dev/null && RES=" + qResSvg + " && break; " +
-            "    fi; " +
-            "  done; " +
-            "fi; " +
+            // NB: hardcode "timeout 45" (no $T indirection) — IFS is narrowed
+            // to newline below, which would stop $T from word-splitting
+            "FOUND_ICON=0; IFS='\n'; " +
+            // stage 1: root-level pngs (new runtimes symlink them here), largest first
+            "timeout 45 " + qPath + " --appimage-extract '*.png' >/dev/null 2>&1; " +
+            "for icon in $(find squashfs-root -xtype f -name '*.png' -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -3 | cut -f2-); do " +
+            "REAL_FILE=$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\"); " +
+            "if [ -f \"$REAL_FILE\" ]; then cp \"$REAL_FILE\" " + qOut + ".png 2>/dev/null && FOUND_ICON=1 && break; fi; done; " +
+            // stage 2: svg
+            "if [ \"$FOUND_ICON\" = 0 ]; then rm -rf squashfs-root; " +
+            "timeout 45 " + qPath + " --appimage-extract '*.svg' >/dev/null 2>&1; " +
+            "for icon in $(find squashfs-root -xtype f -name '*.svg' -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -3 | cut -f2-); do " +
+            "REAL_FILE=$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\"); " +
+            "if [ -f \"$REAL_FILE\" ]; then cp \"$REAL_FILE\" " + qOut + ".svg 2>/dev/null && FOUND_ICON=1 && break; fi; done; fi; " +
+            // stage 3: .DirIcon (follows to the real icon; keep its own extension)
+            "if [ \"$FOUND_ICON\" = 0 ]; then rm -rf squashfs-root; " +
+            "timeout 45 " + qPath + " --appimage-extract '.DirIcon' >/dev/null 2>&1; " +
+            "if [ -e squashfs-root/.DirIcon ]; then " +
+            "REAL_FILE=$(readlink -f squashfs-root/.DirIcon 2>/dev/null || echo squashfs-root/.DirIcon); " +
+            "if case \"$REAL_FILE\" in squashfs-root/*) [ -f \"$REAL_FILE\" ] ;; *) false ;; esac; then " +
+            "EXT=\"${REAL_FILE##*.}\"; case \"$EXT\" in png|svg|jpg|jpeg|ico|xpm) ;; *) EXT=png ;; esac; " +
+            "cp \"$REAL_FILE\" " + qOut + ".$EXT 2>/dev/null && FOUND_ICON=1; fi; fi; fi; " +
+            // stage 4: standard icon dirs (accumulate into same squashfs-root)
+            "if [ \"$FOUND_ICON\" = 0 ]; then " +
+            "timeout 45 " + qPath + " --appimage-extract 'usr/share/icons/*' >/dev/null 2>&1; " +
+            "timeout 45 " + qPath + " --appimage-extract 'usr/share/pixmaps/*' >/dev/null 2>&1; " +
+            "for icon in $(find squashfs-root -xtype f \\( -name '*.png' -o -name '*.svg' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.ico' -o -name '*.xpm' \\) -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -3 | cut -f2-); do " +
+            "REAL_FILE=$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\"); " +
+            "if [ -f \"$REAL_FILE\" ]; then EXT=\"${REAL_FILE##*.}\"; case \"$EXT\" in png|svg|jpg|jpeg|ico|xpm) ;; *) EXT=png ;; esac; " +
+            "cp \"$REAL_FILE\" " + qOut + ".$EXT 2>/dev/null && FOUND_ICON=1 && break; fi; done; fi; " +
+            // stage 5: full extract — exotic layouts, last resort
+            "if [ \"$FOUND_ICON\" = 0 ]; then rm -rf squashfs-root; " +
+            "timeout 45 " + qPath + " --appimage-extract >/dev/null 2>&1; " +
+            "for icon in $(find squashfs-root -xtype f \\( -name '.DirIcon' -o -name '*.png' -o -name '*.svg' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.ico' -o -name '*.xpm' \\) -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -3 | cut -f2-); do " +
+            "REAL_FILE=$(readlink -f \"$icon\" 2>/dev/null || echo \"$icon\"); " +
+            "if [ -f \"$REAL_FILE\" ]; then EXT=\"${REAL_FILE##*.}\"; case \"$EXT\" in png|svg|jpg|jpeg|ico|xpm) ;; *) EXT=png ;; esac; " +
+            "cp \"$REAL_FILE\" " + qOut + ".$EXT 2>/dev/null && FOUND_ICON=1 && break; fi; done; fi; " +
             "rm -rf " + qTmp + "; " +
-            "ls -1 " + qGlob + " 2>/dev/null | head -1 || echo '0'"
+            // glob must stay unquoted to expand; RESULT echo for the callback
+            "R=$(ls -1 " + qOut + ".* 2>/dev/null | head -1); " +
+            "if [ -n \"$R\" ]; then echo \"$R\"; else echo '0'; fi"
         ], function(out) {
             let r = String(out).trim();
             if (r && r !== "0") {
                 let stem = cleanName.toLowerCase();
                 _cachedAppIcons[stem] = "file://" + root._appIconCacheDir + "/" + r.split("/").pop();
                 root._reapplyAppIcons();
+            } else {
+                root._extractFailedApps[app.name] = true;
             }
             root._extractNext(list, idx + 1);
         });
