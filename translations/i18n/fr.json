@@ -178,5 +178,7 @@
   "Deleted with administrator privileges": "Supprimé avec les privilèges administrateur",
   "Authentication failed or cancelled": "Échec ou annulation de l'authentification",
   "No polkit authentication agent, use sudo in a terminal": "Aucun agent d'authentification polkit, utilisez sudo dans un terminal",
-  "File too large to preview (over 10 MB), open it in an external editor": "Fichier trop volumineux pour l'aperçu (plus de 10 Mo), ouvrez-le dans un éditeur externe"
+  "File too large to preview (over 10 MB), open it in an external editor": "Fichier trop volumineux pour l'aperçu (plus de 10 Mo), ouvrez-le dans un éditeur externe",
+  "Failed to empty trash": "Échec de la vidange de la corbeille",
+  "Failed to save file": "Échec de l'enregistrement du fichier"
 }

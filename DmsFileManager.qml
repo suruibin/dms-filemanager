@@ -1272,9 +1272,11 @@ DesktopPluginComponent {
             basePath = basePath.substring(0, basePath.length - 1);
 
         // "$1" parameterization keeps arbitrary paths out of shell syntax
+        var token = ++root._pathCompleteToken;
         Proc.runCommand("pathComplete-" + Math.random(),
             ["sh", "-c", "ls -1 -p -- \"$1\" 2>/dev/null", "sh", basePath],
             (out, code) => {
+                if (token !== root._pathCompleteToken) return; // stale response
                 if (code !== 0 || !out) { _pathCompletions = []; return; }
 
                 var entries = String(out).trim().split("\n").filter(e => e.length > 0);
@@ -4281,6 +4283,8 @@ DesktopPluginComponent {
     property bool folderPathEditMode: false
     property var _pathCompletions: []
     property int _pathCompletionIndex: -1
+    // Bumped on every completion request; stale async responses are dropped
+    property int _pathCompleteToken: 0
 
     // Folder Switcher Dropdown Popup
     property bool sidebarPinned: pluginData.sidebarPinned ?? true
@@ -4649,8 +4653,12 @@ DesktopPluginComponent {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                Quickshell.execDetached(["gio", "trash", "--empty"]);
-                                folderModel.folder = Qt.resolvedUrl(root.targetFolderUrl);
+                                Proc.runCommand("emptyTrash-" + Math.random(),
+                                    ["gio", "trash", "--empty"], (out, code) => {
+                                    if (code !== 0)
+                                        ToastService.showToast(i18n("Failed to empty trash") + (out && out.trim() ? ": " + out.trim() : ""), ToastService.levelError);
+                                    folderModel.folder = Qt.resolvedUrl(root.targetFolderUrl);
+                                });
                                 emptyTrashConfirm.close();
                             }
                         }
@@ -5496,9 +5504,15 @@ DesktopPluginComponent {
                 .replace(/\r/g, "\\r")
                 .replace(/\t/g, "\\t")
                 .replace(/\f/g, "\\f");
-            Quickshell.execDetached(["python3", "-c",
+            Proc.runCommand("saveText-" + Math.random(), ["python3", "-c",
                 "open('" + fpath.replace(/'/g, "'\\''") + "','w').write('" + escaped + "')"
-            ]);
+            ], (out, code) => {
+                if (code !== 0) {
+                    var err = out && out.trim() ? out.trim().split("\n").pop() : "";
+                    if (err.length > 120) err = err.substring(0, 120) + "…";
+                    ToastService.showToast(i18n("Failed to save file") + (err ? ": " + err : ""), ToastService.levelError);
+                }
+            });
         }
 
         Timer {

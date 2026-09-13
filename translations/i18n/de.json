@@ -178,5 +178,7 @@
   "Deleted with administrator privileges": "Mit Administratorrechten gelöscht",
   "Authentication failed or cancelled": "Authentifizierung fehlgeschlagen oder abgebrochen",
   "No polkit authentication agent, use sudo in a terminal": "Kein Polkit-Authentifizierungsagent, bitte sudo im Terminal verwenden",
-  "File too large to preview (over 10 MB), open it in an external editor": "Datei zu groß für die Vorschau (über 10 MB), bitte in einem externen Editor öffnen"
+  "File too large to preview (over 10 MB), open it in an external editor": "Datei zu groß für die Vorschau (über 10 MB), bitte in einem externen Editor öffnen",
+  "Failed to empty trash": "Papierkorb leeren fehlgeschlagen",
+  "Failed to save file": "Datei konnte nicht gespeichert werden"
 }

@@ -178,5 +178,7 @@
   "Deleted with administrator privileges": "관리자 권한으로 삭제되었습니다",
   "Authentication failed or cancelled": "인증에 실패했거나 취소되었습니다",
   "No polkit authentication agent, use sudo in a terminal": "polkit 인증 에이전트가 없습니다. 터미널에서 sudo를 사용하세요",
-  "File too large to preview (over 10 MB), open it in an external editor": "파일이 너무 커서 미리볼 수 없습니다(10 MB 초과). 외부 편집기로 여세요"
+  "File too large to preview (over 10 MB), open it in an external editor": "파일이 너무 커서 미리볼 수 없습니다(10 MB 초과). 외부 편집기로 여세요",
+  "Failed to empty trash": "휴지통 비우기 실패",
+  "Failed to save file": "파일 저장 실패"
 }

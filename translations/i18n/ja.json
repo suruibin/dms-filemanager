@@ -178,5 +178,7 @@
   "Deleted with administrator privileges": "管理者権限で削除しました",
   "Authentication failed or cancelled": "認証に失敗したか、キャンセルされました",
   "No polkit authentication agent, use sudo in a terminal": "polkit認証エージェントがありません。ターミナルでsudoを使用してください",
-  "File too large to preview (over 10 MB), open it in an external editor": "ファイルが大きすぎてプレビューできません（10 MB超）。外部エディタで開いてください"
+  "File too large to preview (over 10 MB), open it in an external editor": "ファイルが大きすぎてプレビューできません（10 MB超）。外部エディタで開いてください",
+  "Failed to empty trash": "ゴミ箱を空にできませんでした",
+  "Failed to save file": "ファイルの保存に失敗しました"
 }

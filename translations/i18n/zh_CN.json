@@ -179,5 +179,7 @@
   "Deleted with administrator privileges": "已通过管理员权限删除",
   "Authentication failed or cancelled": "认证未通过，已取消删除",
   "No polkit authentication agent, use sudo in a terminal": "无 polkit 认证代理，请在终端使用 sudo 删除",
-  "File too large to preview (over 10 MB), open it in an external editor": "文件过大（超过 10 MB），请用外部编辑器打开"
+  "File too large to preview (over 10 MB), open it in an external editor": "文件过大（超过 10 MB），请用外部编辑器打开",
+  "Failed to empty trash": "清空回收站失败",
+  "Failed to save file": "保存文件失败"
 }

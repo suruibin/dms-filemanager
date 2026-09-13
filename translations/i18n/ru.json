@@ -178,5 +178,7 @@
   "Deleted with administrator privileges": "Удалено с правами администратора",
   "Authentication failed or cancelled": "Аутентификация не пройдена или отменена",
   "No polkit authentication agent, use sudo in a terminal": "Нет агента аутентификации polkit, используйте sudo в терминале",
-  "File too large to preview (over 10 MB), open it in an external editor": "Файл слишком велик для предпросмотра (более 10 МБ), откройте его во внешнем редакторе"
+  "File too large to preview (over 10 MB), open it in an external editor": "Файл слишком велик для предпросмотра (более 10 МБ), откройте его во внешнем редакторе",
+  "Failed to empty trash": "Не удалось очистить корзину",
+  "Failed to save file": "Не удалось сохранить файл"
 }
