@@ -292,6 +292,10 @@ DesktopPluginComponent {
     // Session-level "no icon found" markers — avoids re-running the (slow)
     // extraction pipeline for icon-less AppImages on every folder refresh
     property var _extractFailedApps: ({})
+    // One extraction at a time (same as dmsconky launcher) — parallel chains
+    // would rm -rf each other's tmp dirs and race on cache writes
+    property bool _iconExtractBusy: false
+    property var _iconPendingApp: null
     property string emptyColor: pluginData.emptyColor ?? "#FFEA00"
     // Resolved color for the empty indicator dot: "" (follow theme) → primary
     readonly property string emptyIndicatorColor: emptyColor !== "" ? emptyColor : Theme.primary
@@ -1735,34 +1739,45 @@ DesktopPluginComponent {
         if (root.extractAppIcons) {
         let _iconDir = root._appIconCacheDir;
         Proc.runCommand("scanAppIcon-" + Math.random(), ["sh", "-c", "ls -1 " + _shellQuote(_iconDir) + " 2>/dev/null | head -100"], (out, code) => {
-            if (code !== 0 || !out || String(out).trim() === "") return;
+            if (code !== 0) return;
             let iconFiles = String(out).trim().split('\n').filter(f => {
                 let lower = f.toLowerCase();
                 return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
                     || lower.endsWith(".svg") || lower.endsWith(".webp");
             });
-            if (iconFiles.length === 0) return;
             // Build icon stem → file:// URI map (lowercased stems)
             let _iMap = {};
             for (let _f of iconFiles) {
                 let _dot = _f.lastIndexOf('.');
                 if (_dot > 0) _iMap[_f.substring(0, _dot).toLowerCase()] = "file://" + _iconDir + "/" + _f;
             }
-            // merge into global cache (don't replace — extraction callbacks may have added entries)
+            // Reconcile in-memory cache with disk: if the user deleted the
+            // cache dir (or individual icons), stale file:// entries would
+            // otherwise block re-extraction forever
+            for (let _sk in _cachedAppIcons) {
+                if (!_iMap[_sk]) delete _cachedAppIcons[_sk];
+            }
             for (let _sk in _iMap) _cachedAppIcons[_sk] = _iMap[_sk];
-            // Match each non-dir AppImage in the model
+            // Match each non-dir AppImage in the model; clear stale icon refs
+            let _cleared = false;
             for (let _k = 0; _k < filteredModel.count; _k++) {
                 let _name = filteredModel.get(_k).fileName;
                 let _isDir = filteredModel.get(_k).fileIsDir;
                 if (_isDir || (!_name.endsWith(".AppImage") && !_name.endsWith(".appimage"))) continue;
                 let _matchBase = _name.substring(0, _name.length - 9).toLowerCase(); // strip .AppImage/.appimage
+                let _found = "";
                 for (let _stem in _iMap) {
-                    if (_matchBase.includes(_stem)) {
-                        filteredModel.setProperty(_k, "appIcon", _iMap[_stem]);
-                        break;
-                    }
+                    if (_matchBase.includes(_stem)) { _found = _iMap[_stem]; break; }
+                }
+                if (_found !== "") {
+                    filteredModel.setProperty(_k, "appIcon", _found);
+                } else {
+                    let _cur = filteredModel.get(_k).appIcon;
+                    if (_cur && _cur !== "") { filteredModel.setProperty(_k, "appIcon", ""); _cleared = true; }
                 }
             }
+            // kick extraction again for items whose icons just got invalidated
+            if (_cleared) root._extractMissingIcons();
         });
         // ── AppImage extraction for uncached ───────────────────────────────
         root._extractMissingIcons();
@@ -5263,6 +5278,17 @@ DesktopPluginComponent {
         }
     }
 
+    // AppImage icon extraction — dedicated declarative Process (dmsconky
+    // launcher mechanism; immune to Proc.runCommand callback quirks)
+    Process {
+        id: appIconExtractProc
+        command: []
+        stdout: StdioCollector {
+            id: appIconExtractCollector
+            onStreamFinished: root._handleAppIconExtracted(appIconExtractCollector.text)
+        }
+    }
+
     // Available-space lookup: mountpoint -> free bytes (populated by dfProc)
     property var _driveAvail: ({})
 
@@ -6375,7 +6401,8 @@ DesktopPluginComponent {
     }
 
     function _extractMissingIcons() {
-        let needExtract = [];
+        if (root._iconExtractBusy) return;
+        let next = null;
         for (let _k = 0; _k < filteredModel.count; _k++) {
             let item = filteredModel.get(_k);
             if (item.fileIsDir || !/\.AppImage$/i.test(item.fileName)) continue;
@@ -6392,17 +6419,16 @@ DesktopPluginComponent {
                 .replace(/[-_]\d+([-_.]\d+)*([-_][a-z]*\d*)?$/i, "")
                 .replace(/(\.v?\d+([-_.]\d+)*([-_.][a-z]+\d*)?)$/i, "")
                 .replace(/[-_](fixed|stable|beta|alpha|rc|patch|debug|release|final|portable|setup|linux)$/i, "");
-            if (_cachedAppIcons[clean]) continue;
-            needExtract.push({ index: _k, name: item.fileName, appName: clean || _matchBase, path: item.filePath });
+            if (clean && _cachedAppIcons[clean]) continue;
+            next = { name: item.fileName, appName: clean || _matchBase, path: item.filePath };
+            break;
         }
-        if (needExtract.length === 0) return;
-        root._extractNext(needExtract, 0);
+        if (!next) return;
+        root._iconExtractBusy = true;
+        root._extractOne(next);
     }
 
-    function _extractNext(list, idx) {
-        if (idx >= list.length) return;
-        if (!list[idx]) { root._extractNext(list, idx + 1); return; }
-        let app = list[idx];
+    function _extractOne(app) {
         let appPath = root._cleanPath(app.path);
         // extract using simplified name (no version/arch)
         let rawName = app.appName;
@@ -6422,8 +6448,7 @@ DesktopPluginComponent {
         // Staged pattern extraction (same strategy as dmsconky launcher):
         // each stage pulls only icon-sized KBs instead of unpacking the whole
         // squashfs. png → svg → .DirIcon → usr/share/{icons,pixmaps} → full.
-        Proc.runCommand("extract-" + idx, ["sh", "-c",
-            "mkdir -p " + qDir + " && " +
+        let script = "mkdir -p " + qDir + " && " +
             "rm -rf " + qTmp + " && mkdir -p " + qTmp + " && " +
             "cd " + qTmp + " && " +
             // NB: hardcode "timeout 45" (no $T indirection) — IFS is narrowed
@@ -6466,18 +6491,28 @@ DesktopPluginComponent {
             "rm -rf " + qTmp + "; " +
             // glob must stay unquoted to expand; RESULT echo for the callback
             "R=$(ls -1 " + qOut + ".* 2>/dev/null | head -1); " +
-            "if [ -n \"$R\" ]; then echo \"$R\"; else echo '0'; fi"
-        ], function(out) {
-            let r = String(out).trim();
-            if (r && r !== "0") {
-                let stem = cleanName.toLowerCase();
-                _cachedAppIcons[stem] = "file://" + root._appIconCacheDir + "/" + r.split("/").pop();
-                root._reapplyAppIcons();
-            } else {
-                root._extractFailedApps[app.name] = true;
-            }
-            root._extractNext(list, idx + 1);
-        });
+            "if [ -n \"$R\" ]; then echo \"$R\"; else echo '0'; fi";
+        root._iconPendingApp = app;
+        appIconExtractProc.command = ["sh", "-c", script];
+        appIconExtractProc.running = true;
+    }
+
+    function _handleAppIconExtracted(outText) {
+        root._iconExtractBusy = false;
+        let app = root._iconPendingApp;
+        root._iconPendingApp = null;
+        let r = String(outText).trim();
+        if (app && r && r !== "0" && r.indexOf(root._appIconCacheDir) === 0) {
+            // derive stem from the written file so cache key always matches it
+            let base = r.substring(r.lastIndexOf("/") + 1);
+            let dot = base.lastIndexOf(".");
+            let stem = (dot > 0 ? base.substring(0, dot) : base).toLowerCase();
+            _cachedAppIcons[stem] = "file://" + r;
+            root._reapplyAppIcons();
+        } else if (app) {
+            root._extractFailedApps[app.name] = true;
+        }
+        root._extractMissingIcons();
     }
 
     // Paste progress pill — floats above the toolbar while paste.py works
